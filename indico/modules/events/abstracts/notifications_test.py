@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -15,9 +15,6 @@ from indico.modules.events.abstracts.util import build_default_email_template
 from indico.modules.events.contributions.models.types import ContributionType
 from indico.modules.events.tracks.models.tracks import Track
 from indico.util.date_time import now_utc
-
-
-pytest_plugins = 'indico.modules.events.abstracts.testing.fixtures'
 
 
 def assert_text_equal(v1, v2):
@@ -67,7 +64,7 @@ def abstract_objects(dummy_abstract, create_dummy_contrib_type, create_dummy_tra
 def test_abstract_notification(mocker, abstract_objects, create_email_template, dummy_user):
     send_email = mocker.patch('indico.modules.events.abstracts.notifications.send_email')
 
-    event, abstract, track, contrib_type = abstract_objects
+    event, abstract, _track, contrib_type = abstract_objects
 
     event.abstract_email_templates.append(
         create_email_template(event, 0, 'accept', 'accepted', [{'state': [AbstractState.accepted.value]}], True))
@@ -87,7 +84,7 @@ def test_abstract_notification(mocker, abstract_objects, create_email_template, 
 def test_notification_rules(mocker, abstract_objects, create_email_template, dummy_user, dummy_event):
     send_email = mocker.patch('indico.modules.events.abstracts.notifications.send_email')
 
-    event, abstract, track, contrib_type = abstract_objects
+    event, abstract, track = abstract_objects[:3]
     event.abstract_email_templates.append(
         create_email_template(event, 0, 'merge', 'merged poster for track', [
             {'state': [AbstractState.merged.value], 'track': [track.id]}
@@ -145,7 +142,7 @@ def test_notification_several_conditions(db, mocker, abstract_objects, create_em
 
 @pytest.mark.usefixtures('request_context')
 def test_notification_any_conditions(mocker, abstract_objects, create_email_template, dummy_user):
-    event, abstract, track, contrib_type = abstract_objects
+    event, abstract, track = abstract_objects[:3]
     event.abstract_email_templates = [
         create_email_template(event, 0, 'accept', 'accepted', [
             {'state': [AbstractState.accepted.value]}
@@ -163,7 +160,7 @@ def test_notification_any_conditions(mocker, abstract_objects, create_email_temp
 
 @pytest.mark.usefixtures('request_context')
 def test_notification_stop_on_match(mocker, abstract_objects, create_email_template, dummy_user):
-    event, abstract, track, contrib_type = abstract_objects
+    event, abstract = abstract_objects[:2]
     event.abstract_email_templates = [
         create_email_template(event, 0, 'accept', 'accepted poster', [
             {'state': [AbstractState.accepted.value]}
@@ -192,7 +189,7 @@ def test_email_content(monkeypatch, abstract_objects, create_email_template, dum
         assert event == ev
         assert module == 'Abstracts'
         assert email['subject'] == '[Indico] Abstract Acceptance notification (#314)'
-        assert_text_equal(email['body'], '''
+        assert_text_equal(email['body'], f'''
             Dear Guinea Pig,
 
             We're pleased to announce that your abstract "Broken Symmetry and the Mass of Gauge Vector Mesons" with ID
@@ -216,7 +213,7 @@ def test_email_content(monkeypatch, abstract_objects, create_email_template, dum
             --
             Indico :: Call for Abstracts
             http://localhost/event/{event.id}/
-        '''.format(event=ev))
+        ''')
 
     ev, abstract, track, contrib_type = abstract_objects
     monkeypatch.setattr('indico.modules.events.abstracts.notifications.send_email', _mock_send_email)

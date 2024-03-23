@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -31,7 +31,7 @@ def _verify_captcha(user_answer):
 
 
 def generate_captcha_challenge():
-    """Generate 4-digit CAPTCHA as image and audio"""
+    """Generate 4-digit CAPTCHA as image and audio."""
     # we skip 1 since it's too similar to 7; when verifying we accept both digits
     answer = ''.join(random.choices('023456789', k=4))
     image = ImageCaptcha().generate(answer).read()
@@ -40,7 +40,12 @@ def generate_captcha_challenge():
 
 
 class CaptchaField(fields.String):
-    """Validates an answer to a CAPTCHA."""
+    """Validate an answer to a CAPTCHA."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs['required'] = True  # it makes no sense to have an optional CAPTCHA field
+        kwargs['allow_none'] = False
+        super().__init__(*args, **kwargs)
 
     def _deserialize(self, value, attr, data, **kwargs):
         user_answer = super()._deserialize(value, attr, data, **kwargs)

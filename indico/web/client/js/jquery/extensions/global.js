@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -8,6 +8,7 @@
 // Global scripts that should be executed on all pages
 /* global showFormErrors:false */
 /* eslint-disable max-len */
+/* eslint-disable import/unambiguous */
 
 $(document).ready(function() {
   $('.main-breadcrumb a[href="#"]')
@@ -53,7 +54,10 @@ $(document).ready(function() {
         (!qtipHTML && !title) ||
         this.disabled ||
         $target.data('no-qtip') ||
-        ($target.closest('.ui:not(.ui-qtip)').length && !$target.hasClass('ui-qtip'))
+        ($target.closest('.ui:not(.ui-qtip)').length && !$target.hasClass('ui-qtip')) ||
+        $target.closest('.tox-tinymce').length ||
+        $target.closest('.tox').length ||
+        $target.closest('.fc-toolbar-chunk').length
       ) {
         return;
       }

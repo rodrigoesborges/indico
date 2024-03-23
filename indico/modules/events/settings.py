@@ -1,13 +1,13 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
-import os
 import re
 from functools import wraps
+from pathlib import Path
 
 import yaml
 from flask.helpers import get_root_path
@@ -39,7 +39,7 @@ class EventACLProxy(ACLProxyBase):
 
     @event_or_id
     def get(self, event, name):
-        """Retrieves an ACL setting
+        """Retrieve an ACL setting.
 
         :param event: Event (or its ID)
         :param name: Setting name
@@ -193,9 +193,7 @@ class ThemeSettingsProxy:
     @property
     @memoize
     def settings(self):
-        core_path = os.path.join(get_root_path('indico'), 'modules', 'events', 'themes.yaml')
-        with open(core_path) as f:
-            core_data = f.read()
+        core_data = Path(get_root_path('indico'), 'modules', 'events', 'themes.yaml').read_text()
         core_settings = yaml.safe_load(core_data)
         # YAML doesn't give us access to anchors so we need to include the base yaml.
         # Since duplicate keys are invalid (and may start failing in the future) we
@@ -203,8 +201,7 @@ class ThemeSettingsProxy:
         # file provided by a plugin.
         core_data = re.sub(r'^(\S+:)$', r'__core_\1', core_data, flags=re.MULTILINE)
         for plugin, path in values_from_signal(signals.plugin.get_event_themes_files.send(), return_plugins=True):
-            with open(path) as f:
-                data = f.read()
+            data = Path(path).read_text()
             settings = {k: v
                         for k, v in yaml.safe_load(core_data + '\n' + data).items()
                         if not k.startswith('__core_')}
@@ -267,4 +264,8 @@ unlisted_events_settings = SettingsProxy('unlisted_events', {
     'restricted': False,
 }, acls={
     'authorized_creators'
+})
+
+autolinker_settings = SettingsProxy('autolinker', {
+    'rules': []
 })

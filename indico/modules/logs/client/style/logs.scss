@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -20,6 +20,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
+  gap: 1em;
 
   .toolbars {
     display: flex;
@@ -48,7 +49,6 @@
 .event-log-list {
   display: flex;
   flex-direction: column;
-  padding: 0;
   list-style-type: none;
   color: $black;
 
@@ -139,7 +139,7 @@
     }
 
     .log-entry-details {
-      @extend .text-superfluous;
+      @include text-superfluous();
 
       display: flex;
       flex: 0.65;

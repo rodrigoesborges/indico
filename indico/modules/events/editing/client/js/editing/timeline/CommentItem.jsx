@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -64,17 +64,16 @@ export default function Comment({
               )}
               <time dateTime={serializeDate(createdDt, moment.HTML5_FMT.DATETIME_LOCAL_SECONDS)}>
                 {serializeDate(createdDt, 'LLL')}
-              </time>
+              </time>{' '}
               {modifiedDt && (
-                <span
-                  className="review-comment-edited"
-                  title={Translate.string('On {modificationDate}', {
-                    modificationDate: serializeDate(modifiedDt, 'LLL'),
-                  })}
+                <time
+                  dateTime={serializeDate(modifiedDt, moment.HTML5_FMT.DATETIME_LOCAL_SECONDS)}
+                  title={serializeDate(modifiedDt, 'LLL')}
                 >
-                  {' '}
-                  · <Translate>edited</Translate>
-                </span>
+                  <span className="review-comment-edited">
+                    <Translate>edited</Translate>
+                  </span>
+                </time>
               )}
             </div>
             {canModify && lastRevision.id === revisionId && (

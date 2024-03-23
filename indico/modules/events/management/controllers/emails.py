@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -12,7 +12,7 @@ from webargs.flaskparser import abort
 from indico.core.notifications import make_email, send_email
 from indico.modules.events.contributions.models.persons import AuthorType
 from indico.util.i18n import _
-from indico.util.marshmallow import LowercaseString, not_empty
+from indico.util.marshmallow import LowercaseString, no_relative_urls, not_empty
 from indico.util.placeholders import get_sorted_placeholders, replace_placeholders
 from indico.web.args import use_kwargs
 from indico.web.flask.templating import get_template_module
@@ -91,7 +91,7 @@ class EmailRolesSendMixin:
 
     @use_kwargs({
         'from_address': fields.String(required=True, validate=not_empty),
-        'body': fields.String(required=True, validate=not_empty),
+        'body': fields.String(required=True, validate=[not_empty, no_relative_urls]),
         'subject': fields.String(required=True, validate=not_empty),
         'bcc_addresses': fields.List(LowercaseString(validate=validate.Email()), load_default=lambda: []),
         'copy_for_sender': fields.Bool(load_default=False),
@@ -115,8 +115,8 @@ class EmailRolesSendMixin:
             bcc.update(bcc_addresses)
             with self.event.force_event_locale():
                 tpl = get_template_module('emails/custom.html', subject=email_subject, body=email_body)
-                email = make_email(to_list=email, bcc_list=bcc, from_address=from_address, template=tpl, html=True)
-            send_email(email, self.event, self.log_module, log_metadata=log_metadata)
+                email_data = make_email(to_list=email, bcc_list=bcc, from_address=from_address, template=tpl, html=True)
+            send_email(email_data, self.event, self.log_module, log_metadata=log_metadata)
             count += 1
         if not count:
             raise ExpectedError(_('There are no people matching your selected recipient roles.'))

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -7,10 +7,12 @@
 
 import re
 
+from flask import session
+
 from indico.core.db import db
 from indico.core.plugins import plugin_engine
 from indico.modules.events.payment import PaymentPluginMixin
-from indico.modules.events.payment.models.transactions import PaymentTransaction, TransactionStatus
+from indico.modules.events.payment.models.transactions import PaymentTransaction, TransactionAction, TransactionStatus
 from indico.modules.events.registration.notifications import notify_registration_state_update
 
 
@@ -37,7 +39,7 @@ def register_transaction(registration, amount, currency, action, provider=None, 
     :param currency: the currency used for the transaction
     :param action: the `TransactionAction` of the transaction
     :param provider: the payment method name of the transaction,
-                     or '_manual' if no payment method has been used
+                     or ``None`` if no payment method has been used
     :param data: arbitrary JSON-serializable data specific to the
                  transaction's provider
     """
@@ -48,8 +50,25 @@ def register_transaction(registration, amount, currency, action, provider=None, 
         db.session.flush()
         if new_transaction.status == TransactionStatus.successful:
             registration.update_state(paid=True)
-            notify_registration_state_update(registration)
+            notify_registration_state_update(registration, from_management=(provider is None))
         elif new_transaction.status == TransactionStatus.cancelled:
             registration.update_state(paid=False)
-            notify_registration_state_update(registration)
+            notify_registration_state_update(registration, from_management=(provider is None))
         return new_transaction
+
+
+def toggle_registration_payment(registration, paid):
+    """Toggle registration payment.
+
+    :param registration: the `Registration` to be modified
+    :param paid: `True` if the registration should be set as paid, `False` otherwise
+    """
+    currency = registration.currency if paid else registration.transaction.currency
+    amount = registration.price if paid else registration.transaction.amount
+    action = TransactionAction.complete if paid else TransactionAction.cancel
+    register_transaction(registration=registration,
+                         amount=amount,
+                         currency=currency,
+                         action=action,
+                         data={'changed_by_name': session.user.full_name,
+                               'changed_by_id': session.user.id})

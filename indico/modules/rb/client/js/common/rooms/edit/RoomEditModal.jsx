@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -210,11 +210,11 @@ function RoomEditModal({roomId, locationId, onClose, afterCreation}) {
       ...basicDetails
     } = changedValues;
     try {
+      let response;
       if (isNewRoom) {
         const payload = {...basicDetails};
         payload.location_id = locationId;
-        const response = await indicoAxios.post(roomsURL(), payload);
-        setNewRoomId(response.data.id);
+        response = await indicoAxios.post(roomsURL(), payload);
       } else if (!_.isEmpty(basicDetails)) {
         await indicoAxios.patch(roomURL({room_id: roomId}), basicDetails);
       }
@@ -229,7 +229,7 @@ function RoomEditModal({roomId, locationId, onClose, afterCreation}) {
       if (bookableHours || nonbookablePeriods) {
         const availability = {bookableHours, nonbookablePeriods};
         await indicoAxios.post(
-          updateRoomAvailabilityURL({room_id: roomId}),
+          updateRoomAvailabilityURL({room_id: isNewRoom ? response.data.id : roomId}),
           snakifyKeys(availability)
         );
       }
@@ -237,6 +237,8 @@ function RoomEditModal({roomId, locationId, onClose, afterCreation}) {
       if (!isNewRoom) {
         setWasEverUpdated(true);
         fetchRoomData();
+      } else {
+        setNewRoomId(response.data.id);
       }
     } catch (e) {
       return handleSubmitError(e);

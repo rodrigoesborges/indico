@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -24,13 +24,14 @@ from werkzeug.utils import cached_property
 from indico.core import signals
 from indico.core.auth import multipass
 from indico.core.db import db
-from indico.core.db.sqlalchemy import PyIntEnum
+from indico.core.db.sqlalchemy import PyIntEnum, UTCDateTime
 from indico.core.db.sqlalchemy.custom.unaccent import define_unaccented_lowercase_index
 from indico.core.db.sqlalchemy.principals import PrincipalType
 from indico.core.db.sqlalchemy.util.models import get_default_values
 from indico.modules.users.models.affiliations import Affiliation
 from indico.modules.users.models.emails import UserEmail
 from indico.modules.users.models.favorites import favorite_category_table, favorite_event_table, favorite_user_table
+from indico.util.date_time import now_utc
 from indico.util.enum import RichIntEnum
 from indico.util.i18n import _, force_locale
 from indico.util.locators import locator_property
@@ -277,6 +278,12 @@ class User(PersonMixin, db.Model):
         nullable=False,
         default=False
     )
+    #: the date the user has last accepted the terms of service and privacy policy
+    accepted_terms_dt = db.Column(
+        UTCDateTime,
+        nullable=True,
+        default=None
+    )
     #: a unique secret used to generate signed URLs
     signing_secret = db.Column(
         UUID,
@@ -299,6 +306,12 @@ class User(PersonMixin, db.Model):
         PyIntEnum(ProfilePictureSource),
         nullable=False,
         default=ProfilePictureSource.standard,
+    )
+    #: user account creation date
+    created_dt = db.Column(
+        UTCDateTime,
+        nullable=True,
+        default=now_utc
     )
 
     _primary_email = db.relationship(
@@ -432,6 +445,7 @@ class User(PersonMixin, db.Model):
     # - category_roles (CategoryRole.members)
     # - content_reviewer_for_contributions (Contribution.paper_content_reviewers)
     # - created_events (Event.creator)
+    # - data_export_request (DataExportRequest.user)
     # - editing_comments (EditingRevisionComment.user)
     # - editing_revisions (EditingRevision.user)
     # - editor_for_editables (Editable.editor)
@@ -633,9 +647,7 @@ class User(PersonMixin, db.Model):
 
     @property
     def can_get_all_multipass_groups(self):
-        """
-        Check whether it is possible to get all multipass groups the user is in.
-        """
+        """Check whether it is possible to get all multipass groups the user is in."""
         return all(multipass.identity_providers[x.provider].supports_get_identity_groups
                    for x in self.identities
                    if x.provider != 'indico' and x.provider in multipass.identity_providers)

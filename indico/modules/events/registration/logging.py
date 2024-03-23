@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -29,9 +29,9 @@ def log_registration_check_in(registration, **kwargs):
                      log_text.format(registration.full_name), session.user)
 
 
-def log_registration_updated(registration, previous_state, **kwargs):
+def log_registration_updated(registration, previous_state, silent=False, **kwargs):
     """Log the registration status change to the event log."""
-    if not previous_state:
+    if not previous_state or silent:
         return
     previous_state_title = orig_string(previous_state.title)
     data = {'Previous state': previous_state_title}
@@ -55,8 +55,7 @@ def log_registration_updated(registration, previous_state, **kwargs):
         kind = LogKind.negative
     else:
         state_title = orig_string(registration.state.title).lower()
-        log_text = 'Registration for "{{}}" has been changed from {} to {}'.format(previous_state_title.lower(),
-                                                                                   state_title)
+        log_text = f'Registration for "{{}}" has been changed from {previous_state_title.lower()} to {state_title}'
         kind = LogKind.change
     registration.log(EventLogRealm.participants, kind, 'Registration', log_text.format(registration.full_name),
                      session.user, data=data)

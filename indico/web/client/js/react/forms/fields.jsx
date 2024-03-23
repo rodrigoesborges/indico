@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -497,7 +497,11 @@ export function FinalCheckbox({name, label, value, ...rest}) {
 
 FinalCheckbox.propTypes = {
   name: PropTypes.string.isRequired,
-  label: PropTypes.oneOfType([PropTypes.string, PropTypes.node]).isRequired,
+  label: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.node,
+    PropTypes.exact({children: PropTypes.node.isRequired}),
+  ]).isRequired,
   value: PropTypes.string,
 };
 
@@ -596,6 +600,7 @@ export function FinalSubmitButton({
   circular,
   size,
   icon,
+  fluid,
   style,
   children,
 }) {
@@ -638,6 +643,7 @@ export function FinalSubmitButton({
             circular={circular}
             size={size}
             icon={icon}
+            fluid={fluid}
           />
         }
         position="bottom right"
@@ -661,6 +667,7 @@ FinalSubmitButton.propTypes = {
   onClick: PropTypes.func,
   circular: PropTypes.bool,
   icon: PropTypes.string,
+  fluid: PropTypes.bool,
   size: PropTypes.string,
   style: PropTypes.object,
   children: PropTypes.func,
@@ -677,6 +684,7 @@ FinalSubmitButton.defaultProps = {
   onClick: null,
   circular: false,
   icon: null,
+  fluid: false,
   size: null,
   style: null,
   children: null,
@@ -794,12 +802,12 @@ ActionButton.propTypes = {
   }).isRequired,
 };
 
-export function Fieldset({legend, children, active}) {
+export function Fieldset({legend, children, active, compact}) {
   if (!active) {
     return children;
   }
   return (
-    <fieldset styleName="fieldset">
+    <fieldset styleName={`fieldset ${compact ? 'compact' : ''}`}>
       <legend>{legend}</legend>
       {children}
     </fieldset>
@@ -810,8 +818,10 @@ Fieldset.propTypes = {
   legend: PropTypes.string.isRequired,
   children: PropTypes.node.isRequired,
   active: PropTypes.bool,
+  compact: PropTypes.bool,
 };
 
 Fieldset.defaultProps = {
   active: true,
+  compact: false,
 };

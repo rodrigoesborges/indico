@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -15,6 +15,7 @@ from indico.core.settings.util import get_all_settings, get_setting
 
 class UserSetting(JSONSettingsBase, db.Model):
     """User-specific settings."""
+
     __table_args__ = (db.Index(None, 'user_id', 'module', 'name'),
                       db.Index(None, 'user_id', 'module'),
                       db.UniqueConstraint('user_id', 'module', 'name'),

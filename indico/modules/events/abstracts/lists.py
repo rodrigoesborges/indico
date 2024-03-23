@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -75,7 +75,6 @@ class AbstractListGeneratorBase(ListGeneratorBase):
         Return the contribution fields ordered by their position in
         the abstract form.
         """
-
         if not item_ids or not self.show_contribution_fields:
             return []
         return (ContributionField.query
@@ -185,7 +184,7 @@ class AbstractListGeneratorBase(ListGeneratorBase):
                                        .where(Abstract.submitted_for_tracks.prop.primaryjoin))
                 criteria.append(submitted_for_count > 1)
             if extra_filters.get('comments'):
-                criteria.append(Abstract.submission_comment != '')
+                criteria.append(Abstract.submission_comment != '')  # noqa: PLC1901
         return query.filter(db.and_(*criteria))
 
     def get_list_kwargs(self):
@@ -253,9 +252,7 @@ class AbstractListGeneratorManagement(AbstractListGeneratorBase):
 
 
 class AbstractListGeneratorDisplay(AbstractListGeneratorBase):
-    """
-    Listing and filtering actions in the abstract list in the display view.
-    """
+    """Listing and filtering actions in the abstract list in the display view."""
 
     list_link_type = 'abstract_display'
     endpoint = '.display_reviewable_track_abstracts'

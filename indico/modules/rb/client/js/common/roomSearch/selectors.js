@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -23,6 +23,10 @@ export function roomSearchSelectorFactory(namespace) {
     stateSlice.search.request.state === RequestState.STARTED;
   const isSearchFinished = ({[namespace]: stateSlice}) =>
     stateSlice.search.request.state === RequestState.SUCCESS;
+  const isSearchFailed = ({[namespace]: stateSlice}) =>
+    stateSlice.search.request.state === RequestState.ERROR;
+  const getSearchFailedMessage = ({[namespace]: stateSlice}) =>
+    stateSlice.search.request.error?.message;
 
   const getSearchResults = createSelector(
     getSearchResultIds,
@@ -52,6 +56,8 @@ export function roomSearchSelectorFactory(namespace) {
     getFilters,
     isSearching,
     isSearchFinished,
+    isSearchFailed,
+    getSearchFailedMessage,
     getSearchResults,
     getSearchResultIds,
     getSearchResultIdsWithoutAvailabilityFilter,

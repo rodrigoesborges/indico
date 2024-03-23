@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -16,7 +16,7 @@ from flask import flash, g, has_request_context, jsonify, render_template, reque
 from itsdangerous import Signer
 from markupsafe import Markup
 from werkzeug.datastructures import MultiDict
-from werkzeug.exceptions import BadRequest, Forbidden, ImATeapot
+from werkzeug.exceptions import BadRequest, Forbidden, ImATeapot, RequestEntityTooLarge
 
 from indico.util.caching import memoize_request
 from indico.util.i18n import _
@@ -121,6 +121,7 @@ class ExpectedError(ImATeapot):
     :param message: A short message describing the error
     :param data: Any additional data to return
     """
+
     def __init__(self, message, **data):
         super().__init__(message or 'Something went wrong')
         self.data = dict(data, message=message)
@@ -161,6 +162,14 @@ def get_request_info(hide_passwords=True):
         } if session.user else None
     except Exception as exc:
         user_info = f'ERROR: {exc}'
+    try:
+        request_data = {
+            'get': _format_request_data(request.args),
+            'post': _format_request_data(request.form, hide_passwords=hide_passwords),
+            'json': request.get_json(silent=True),
+        }
+    except RequestEntityTooLarge as exc:
+        request_data = {'ERROR': str(exc)}
     return {
         'id': request.id,
         'time': datetime.now().isoformat(),
@@ -174,9 +183,7 @@ def get_request_info(hide_passwords=True):
         'referrer': request.referrer,
         'data': {
             'url': _format_request_data(request.view_args) if request.view_args is not None else None,
-            'get': _format_request_data(request.args),
-            'post': _format_request_data(request.form, hide_passwords=hide_passwords),
-            'json': request.get_json(silent=True),
+            **request_data,
             'headers': _format_request_data(request.headers, False),
         }
     }
@@ -377,7 +384,6 @@ def get_request_user():
     - an OAuth token
     - a signature for a persistent url
     """
-
     if g.get('get_request_user_failed'):
         # If getting the current user failed, we abort early in case something
         # tries again since that code may be in logging or error handling, and

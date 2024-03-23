@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -15,6 +15,7 @@ class AttachedNotesMixin:
     Allow for easy retrieval of structured information about
     items attached to the object.
     """
+
     # When set to ``True`` .has_note preload all notes that exist for the same event
     # Should be set to False when not applicable (no object.event property)
     PRELOAD_EVENT_NOTES = False

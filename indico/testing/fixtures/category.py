@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -27,4 +27,4 @@ def create_category(db):
 @pytest.fixture
 def dummy_category(create_category):
     """Create a mocked dummy category."""
-    return create_category(title='dummy')
+    return create_category(title='dummy', id_=42)

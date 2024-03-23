@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -12,7 +12,7 @@ import {START_DATE} from 'react-dates/constants';
 import {Field, FormSpy} from 'react-final-form';
 import Overridable from 'react-overridable';
 import {connect} from 'react-redux';
-import {Form, Message, Segment} from 'semantic-ui-react';
+import {Form, Message, Segment, Icon} from 'semantic-ui-react';
 
 import {FinalSingleDatePicker, FinalDatePeriod, FinalPrincipal} from 'indico/react/components';
 import {
@@ -28,8 +28,10 @@ import {FavoritesProvider} from 'indico/react/hooks';
 import {PluralTranslate, Translate} from 'indico/react/i18n';
 import {serializeDate} from 'indico/utils/date';
 
+import {selectors as configSelectors} from '../../common/config';
 import {FinalTimeRangePicker} from '../../components/TimeRangePicker';
-import {sanitizeRecurrence} from '../../util';
+import {FinalWeekdayRecurrencePicker} from '../../components/WeekdayRecurrencePicker';
+import {sanitizeRecurrence, getRecurrenceInfo} from '../../util';
 import {selectors as userSelectors} from '../user';
 
 import './BookingEditForm.module.scss';
@@ -41,6 +43,7 @@ class BookingEditForm extends React.Component {
     formProps: PropTypes.object.isRequired,
     onBookingPeriodChange: PropTypes.func,
     hideOptions: PropTypes.objectOf(PropTypes.bool),
+    bookingReasonRequired: PropTypes.string.isRequired,
   };
 
   static defaultProps = {
@@ -87,6 +90,22 @@ class BookingEditForm extends React.Component {
     form.change('dates', filters.dates);
 
     onBookingPeriodChange(filters.dates, timeSlot, filters.recurrence);
+
+    if (newType === 'every' && recurrence.interval === 'week') {
+      this.preselectWeekdayToday(form, true);
+    } else {
+      form.change('recurrence.weekdays', []);
+    }
+  };
+
+  clearWeekdays = interval => {
+    const {
+      formProps: {
+        values: {recurrence},
+      },
+    } = this.props;
+    const updatedWeekdays = interval === 'month' ? [] : recurrence.weekdays;
+    return {...recurrence, weekdays: updatedWeekdays};
   };
 
   isDateDisabled = dt => {
@@ -101,13 +120,50 @@ class BookingEditForm extends React.Component {
     return !dt.isSameOrAfter(startDt, 'day');
   };
 
+  preselectWeekdayToday = (form, force = false) => {
+    const {
+      formProps: {
+        values: {recurrence},
+      },
+    } = this.props;
+
+    const today = moment()
+      .format('ddd')
+      .toLowerCase();
+
+    if (
+      ((recurrence.type === 'every' && recurrence.interval === 'week') || force) &&
+      (recurrence.weekdays === null || recurrence.weekdays.length === 0)
+    ) {
+      const newRecurrence = {...recurrence, weekdays: [today]};
+      form.change('recurrence.weekdays', newRecurrence.weekdays);
+    }
+  };
+
+  getRecurrenceLabel = number => {
+    const {hideOptions} = this.props;
+
+    if (hideOptions.recurringWeekly && hideOptions.recurringMonthly) {
+      return null;
+    }
+
+    if (hideOptions.recurringWeekly) {
+      return [{text: PluralTranslate.string('Month', 'Months', number || 0), value: 'month'}];
+    }
+
+    if (hideOptions.recurringMonthly) {
+      return [{text: PluralTranslate.string('Week', 'Weeks', number || 0), value: 'week'}];
+    }
+  };
+
   render() {
     const {
       user: sessionUser,
-      booking: {bookedForUser, startDt, endDt, room, isAccepted},
+      booking: {bookedForUser, startDt, endDt, room, isAccepted, repetition, link},
       onBookingPeriodChange,
       formProps,
       hideOptions,
+      bookingReasonRequired,
     } = this.props;
     const {
       values: {dates, recurrence, timeSlot, usage},
@@ -115,16 +171,27 @@ class BookingEditForm extends React.Component {
       form,
       handleSubmit,
     } = formProps;
+    const requireReason =
+      {always: true, never: false, not_for_events: !link}[bookingReasonRequired] ?? true;
     const bookedByCurrentUser = sessionUser.id === bookedForUser.id;
     const today = moment();
     const bookingStarted = today.isAfter(startDt, 'day');
     const bookingFinished = today.isAfter(endDt, 'day');
+    const recurringBookingInProgress = getRecurrenceInfo(repetition).type === 'every';
+    const recurrenceHidden = hideOptions.recurringWeekly && hideOptions.recurringMonthly;
 
     // all but one option are hidden
     const showRecurrenceOptions =
       ['single', 'daily', 'recurring'].filter(x => hideOptions[x]).length !== 2;
+    const hideMessage = hideOptions.recurringWeekly || hideOptions.recurringMonthly;
     return (
       <Form id="booking-edit-form" styleName="booking-edit-form" onSubmit={handleSubmit}>
+        {!hideMessage && recurringBookingInProgress && recurrence.type === 'every' && (
+          <Message icon styleName="repeat-frequency-disabled-notice">
+            <Icon name="dont" />
+            <Translate>You cannot modify the repeat frequency of an existing booking.</Translate>
+          </Message>
+        )}
         <Segment>
           {showRecurrenceOptions && (
             <Form.Group inline>
@@ -146,7 +213,7 @@ class BookingEditForm extends React.Component {
                   onClick={() => this.recurrenceTypeChanged('daily')}
                 />
               )}
-              {!hideOptions.recurring && (
+              {!recurrenceHidden && (
                 <FinalRadio
                   name="recurrence.type"
                   label={Translate.string('Recurring booking')}
@@ -179,30 +246,34 @@ class BookingEditForm extends React.Component {
                   }
                 }}
               />
-              <Field name="recurrence.number" subscription={{value: true}}>
-                {({input: {value: number}}) => (
-                  <FinalDropdown
-                    name="recurrence.interval"
-                    disabled={submitSucceeded}
-                    selection
-                    required
-                    options={[
-                      {
-                        value: 'week',
-                        text: PluralTranslate.string('Week', 'Weeks', number || 0),
-                      },
-                      {
-                        value: 'month',
-                        text: PluralTranslate.string('Month', 'Months', number || 0),
-                      },
-                    ]}
-                    onChange={newInterval => {
-                      const newRecurrence = {...recurrence, interval: newInterval};
-                      onBookingPeriodChange(dates, timeSlot, newRecurrence);
-                    }}
-                  />
-                )}
-              </Field>
+              {hideOptions.recurringWeekly || hideOptions.recurringMonthly ? (
+                <label>{this.getRecurrenceLabel(recurrence.number).map(x => x.text)}</label>
+              ) : (
+                <Field name="recurrence.number" subscription={{}}>
+                  {({input: {value: number}}) => (
+                    <FinalDropdown
+                      name="recurrence.interval"
+                      disabled={submitSucceeded || recurringBookingInProgress}
+                      selection
+                      required
+                      options={[
+                        {
+                          value: 'week',
+                          text: PluralTranslate.string('Week', 'Weeks', number || 0),
+                        },
+                        {
+                          value: 'month',
+                          text: PluralTranslate.string('Month', 'Months', number || 0),
+                        },
+                      ]}
+                      onChange={newInterval => {
+                        onBookingPeriodChange(dates, timeSlot, this.clearWeekdays(newInterval));
+                        this.preselectWeekdayToday(form);
+                      }}
+                    />
+                  )}
+                </Field>
+              )}
             </Form.Group>
           )}
           {recurrence.type === 'single' ? (
@@ -220,7 +291,7 @@ class BookingEditForm extends React.Component {
             <FinalDatePeriod
               name="dates"
               onChange={newDates => {
-                onBookingPeriodChange(newDates, timeSlot, recurrence);
+                onBookingPeriodChange(newDates, timeSlot, this.clearWeekdays(recurrence.interval));
               }}
               disabled={submitSucceeded || bookingFinished}
               disabledDateFields={bookingStarted ? START_DATE : null}
@@ -238,6 +309,23 @@ class BookingEditForm extends React.Component {
               disabled={submitSucceeded || bookingFinished}
             />
           )}
+          <div
+            style={
+              recurrence.type === 'every' && recurrence.interval === 'week' ? {} : {display: 'none'}
+            }
+          >
+            <div styleName="recurring-every-label">
+              <Translate>Recurring every</Translate>
+            </div>
+            <FinalWeekdayRecurrencePicker
+              name="recurrence.weekdays"
+              requireOneSelected
+              onChange={newWeekdays => {
+                const newRecurrence = {...recurrence, weekdays: newWeekdays};
+                onBookingPeriodChange(dates, timeSlot, newRecurrence);
+              }}
+            />
+          </div>
           {!room.canUserBook && room.canUserPrebook && isAccepted && (
             <FormSpy subscription={{dirtyFields: true, initialValues: true, values: true}}>
               {({dirtyFields, initialValues, values}) =>
@@ -290,8 +378,9 @@ class BookingEditForm extends React.Component {
           </FieldCondition>
           <FinalTextArea
             name="reason"
+            nullIfEmpty
             placeholder={Translate.string('Reason for booking')}
-            required
+            required={requireReason}
             disabled={submitSucceeded}
           />
         </Segment>
@@ -313,4 +402,5 @@ class BookingEditForm extends React.Component {
 
 export default connect(state => ({
   user: userSelectors.getUserInfo(state),
+  bookingReasonRequired: configSelectors.getBookingReasonRequired(state),
 }))(Overridable.component('BookingEditForm', BookingEditForm));

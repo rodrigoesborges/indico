@@ -1,20 +1,19 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
-import os
 import tarfile
 import uuid
 from datetime import datetime, timedelta
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 import yaml
 
-from indico.core.db.sqlalchemy.links import LinkType
 from indico.modules.attachments.util import get_attached_items
 from indico.modules.events.contributions import Contribution
 from indico.modules.events.export import export_event, import_event
@@ -59,8 +58,7 @@ def test_event_export(db, dummy_event, monkeypatch):
     export_event(dummy_event, f)
     f.seek(0)
 
-    with open(os.path.join(os.path.dirname(__file__), 'export_test_1.yaml')) as ref_file:
-        data_yaml_content = ref_file.read()
+    data_yaml_content = (Path(__file__).parent / 'export_test_1.yaml').read_text()
 
     # check composition of tarfile and data.yaml content
     with tarfile.open(fileobj=f) as tarf:
@@ -68,17 +66,11 @@ def test_event_export(db, dummy_event, monkeypatch):
         assert tarf.extractfile('data.yaml').read().decode() == data_yaml_content
 
 
-@pytest.mark.usefixtures('reproducible_uuids')
-def test_event_attachment_export(db, dummy_event, dummy_attachment):
+@pytest.mark.usefixtures('reproducible_uuids', 'dummy_attachment')
+def test_event_attachment_export(db, dummy_event):
     s = Session(event=dummy_event, title='sd', is_deleted=True)
     Contribution(event=dummy_event, title='c1', duration=timedelta(minutes=30))
     Contribution(event=dummy_event, title='c2', session=s, duration=timedelta(minutes=30), is_deleted=True)
-
-    dummy_attachment.folder.event = dummy_event
-    dummy_attachment.folder.linked_event = dummy_event
-    dummy_attachment.folder.link_type = LinkType.event
-
-    dummy_attachment.file.save(BytesIO(b'hello world'))
     db.session.flush()
 
     f = BytesIO()
@@ -112,9 +104,7 @@ def test_event_attachment_export(db, dummy_event, dummy_attachment):
 
 @pytest.mark.usefixtures('static_indico_version')
 def test_event_import(db, dummy_user):
-    with open(os.path.join(os.path.dirname(__file__), 'export_test_2.yaml')) as ref_file:
-        data_yaml_content = ref_file.read()
-
+    data_yaml_content = (Path(__file__).parent / 'export_test_2.yaml').read_text()
     data_yaml = BytesIO(data_yaml_content.encode())
     tar_buffer = BytesIO()
 

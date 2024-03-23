@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -55,13 +55,8 @@ class ImageFile(StoredFileMixin, db.Model):
         path_segments = ['event', strict_str(self.event.id), 'images']
         self.assign_id()
         filename = '{}-{}'.format(self.id, secure_filename(self.filename, 'file'))
-        path = posixpath.join(*(path_segments + [filename]))
+        path = posixpath.join(*path_segments, filename)
         return config.ATTACHMENT_STORAGE, path
 
     def __repr__(self):
-        return '<ImageFile({}, {}, {}, {})>'.format(
-            self.id,
-            self.event_id,
-            self.filename,
-            self.content_type
-        )
+        return f'<ImageFile({self.id}, {self.event_id}, {self.filename}, {self.content_type})>'

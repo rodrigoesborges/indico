@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -32,7 +32,6 @@
     content: ' ';
     position: absolute;
     left: 0;
-    box-sizing: border-box;
     width: 120%;
     animation: fade-slide-down 2s ease-out forwards;
   }
@@ -80,6 +79,7 @@
   .landing-page-card:global(.ui.card) {
     transition: max-height 0.25s ease-out;
     margin: 10vh auto auto auto;
+    width: unset;
 
     @media (max-width: $tablet-width) {
       width: 100%;

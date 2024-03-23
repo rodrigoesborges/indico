@@ -1,12 +1,14 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
-from indico.modules.events.registration import api
 from indico.modules.events.registration.controllers import display
+from indico.modules.events.registration.controllers.api import checkin as api_checkin
+from indico.modules.events.registration.controllers.api import checkin_legacy as api_checkin_legacy
+from indico.modules.events.registration.controllers.api import misc as api_misc
 from indico.modules.events.registration.controllers.compat import compat_registration
 from indico.modules.events.registration.controllers.management import (fields, invitations, privacy, regforms, reglists,
                                                                        sections, tags, tickets)
@@ -63,8 +65,8 @@ _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:regi
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/toggle-payment',
                  'toggle_registration_payment', reglists.RHRegistrationTogglePayment, methods=('POST',))
 _bp.add_url_rule(
-    '/manage/registration/<int:reg_form_id>' '/registrations/<int:registration_id>/file/<int:field_data_id>-<filename>',
-    'registration_file', reglists.RHRegistrationDownloadAttachment)
+    '/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/file/<int:field_data_id>-<filename>',
+    'manage_registration_file', reglists.RHRegistrationDownloadAttachment)
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/approve',
                  'approve_registration', reglists.RHRegistrationApprove, methods=('POST',))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/reject',
@@ -75,8 +77,26 @@ _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:regi
                  'hide_registration', reglists.RHRegistrationHide, methods=('POST',))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/withdraw',
                  'manage_withdraw_registration', reglists.RHRegistrationManageWithdraw, methods=('POST',))
+_bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/close-modification',
+                 'registration_close_modification',
+                 reglists.RHRegistrationRemoveModification, methods=('POST',))
+_bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/schedule-modification',
+                 'registration_schedule_modification',
+                 reglists.RHRegistrationScheduleModification, methods=('GET', 'POST'))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/check-in',
                  'registration_check_in', reglists.RHRegistrationCheckIn, methods=('PUT', 'DELETE'))
+_bp.add_url_rule(
+    '/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/receipts/<int:file_id>/<filename>',
+    'download_receipt', reglists.RHDownloadReceipt)
+_bp.add_url_rule(
+    '/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/receipts/<int:file_id>/publish',
+    'publish_receipt', reglists.RHPublishReceipt, methods=('GET', 'POST'))
+_bp.add_url_rule(
+    '/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/receipts/<int:file_id>/unpublish',
+    'unpublish_receipt', reglists.RHUnpublishReceipt, methods=('POST',))
+_bp.add_url_rule(
+    '/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/receipts/<int:file_id>/',
+    'delete_receipt', reglists.RHDeleteReceipt, methods=('DELETE',))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/email', 'email_registrants',
                  reglists.RHRegistrationEmailRegistrants, methods=('GET', 'POST'))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/email-preview', 'email_registrants_preview',
@@ -95,10 +115,14 @@ _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/approve',
                  reglists.RHRegistrationsApprove, methods=('POST',))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/reject', 'registrations_reject',
                  reglists.RHRegistrationsReject, methods=('POST',))
+_bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/update-price', 'registrations_update_price',
+                 reglists.RHRegistrationsBasePrice, methods=('POST',))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/check-in', 'registrations_check_in',
                  reglists.RHRegistrationBulkCheckIn, methods=('POST',))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/attachments', 'registrations_attachments_export',
                  reglists.RHRegistrationsExportAttachments, methods=('POST',))
+_bp.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/receipts', 'registrations_receipts_export',
+                 reglists.RHRegistrationsExportReceipts, methods=('POST',))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/badges/config', 'registrations_config_badges',
                  reglists.RHRegistrationsConfigBadges, methods=('POST',))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/tickets/config', 'registrations_config_tickets',
@@ -149,8 +173,6 @@ _bp.add_url_rule('/manage/registration/<int:reg_form_id>/tags/assign', 'manage_r
                  tags.RHRegistrationTagsAssign, methods=('POST',))
 
 # Regform edition: sections
-# The trailing slashes should be added to the blueprints here when Angular is updated
-# Right now, Angular strips off trailing slashes, thus causing Flask to throw errors
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/form/sections', 'add_section',
                  sections.RHRegistrationFormAddSection, methods=('POST',))
 _bp.add_url_rule('/manage/registration/<int:reg_form_id>/form/sections/<section_id>', 'modify_section',
@@ -196,20 +218,40 @@ _bp.add_url_rule('/registrations/<int:reg_form_id>/check-email', 'check_email', 
 _bp.add_url_rule('/registrations/<int:reg_form_id>/decline-invitation', 'decline_invitation',
                  display.RHRegistrationFormDeclineInvitation, methods=('POST',))
 _bp.add_url_rule('/registrations/<int:reg_form_id>/ticket.pdf', 'ticket_download', display.RHTicketDownload)
+_bp.add_url_rule('/registrations/<int:reg_form_id>/receipts/<int:file_id>/<filename>', 'receipt_download_display',
+                 display.RHReceiptDownload)
+_bp.add_url_rule('/registrations/<int:reg_form_id>/ticket/google-wallet', 'ticket_google_wallet',
+                 display.RHTicketGoogleWallet)
 _bp.add_url_rule('/registrations/<int:reg_form_id>/<int:registration_id>/avatar', 'registration_avatar',
                  display.RHRegistrationAvatar)
+_bp.add_url_rule('/registrations/<int:reg_form_id>/<int:registration_id>/picture/<int:field_data_id>/<filename>',
+                 'registration_picture', display.RHRegistrationDownloadPicture)
 
 
 # API
-_bp.add_url_rule('!/api/events/<int:event_id>/registrants/<int:registrant_id>', 'api_registrant',
-                 api.RHAPIRegistrant, methods=('GET', 'PATCH'))
-_bp.add_url_rule('!/api/events/<int:event_id>/registrants', 'api_registrants',
-                 api.RHAPIRegistrants)
-_bp.add_url_rule('/api/registration-forms', 'api_registration_forms', api.RHAPIRegistrationForms)
+_bp.add_url_rule('/api/registration-forms', 'api_registration_forms', api_misc.RHAPIRegistrationForms)
 _bp.add_url_rule('/api/registration/<int:reg_form_id>/tags/assign', 'api_registration_tags_assign',
                  tags.RHAPIRegistrationTagsAssign, methods=('POST',))
 _bp.add_url_rule('/api/registration/<int:reg_form_id>/privacy/consent', 'api_registration_change_consent',
                  privacy.RHAPIRegistrationChangeConsent, methods=('POST',))
+
+
+# Check-in app API
+_bp.add_url_rule('!/api/checkin/event/<int:event_id>/', 'api_checkin_event', api_checkin.RHCheckinAPIEventDetails)
+_bp.add_url_rule('!/api/checkin/event/<int:event_id>/forms/', 'api_checkin_regforms', api_checkin.RHCheckinAPIRegForms)
+_bp.add_url_rule('!/api/checkin/event/<int:event_id>/forms/<int:reg_form_id>/', 'api_checkin_regform',
+                 api_checkin.RHCheckinAPIRegFormDetails)
+_bp.add_url_rule('!/api/checkin/event/<int:event_id>/forms/<int:reg_form_id>/registrations/',
+                 'api_checkin_registrations', api_checkin.RHCheckinAPIRegistrations)
+_bp.add_url_rule('!/api/checkin/event/<int:event_id>/forms/<int:reg_form_id>/registrations/<int:registration_id>',
+                 'api_checkin_registration', api_checkin.RHCheckinAPIRegistration, methods=('GET', 'PATCH'))
+_bp.add_url_rule('!/api/checkin/ticket/<uuid:ticket_uuid>',
+                 'api_checkin_registration_uuid', api_checkin.RHCheckinAPIRegistrationUUID)
+
+# Deprecated Check-in app API
+_bp.add_url_rule('!/api/events/<int:event_id>/registrants/<int:registrant_id>', 'api_registrant',
+                 api_checkin_legacy.RHAPIRegistrant, methods=('GET', 'PATCH'))
+_bp.add_url_rule('!/api/events/<int:event_id>/registrants', 'api_registrants', api_checkin_legacy.RHAPIRegistrants)
 
 # Participants
 _bp_participation = IndicoBlueprint('event_participation', __name__, url_prefix='/event/<int:event_id>',

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -150,7 +150,7 @@ class RHSendSurveyLinks(RHManageSurveyBase):
             num = len(form.recipients.data)
             flash(ngettext('Your email has been sent.', '{} emails have been sent.', num).format(num))
             return jsonify_data(flash=True)
-        return jsonify_form(form)
+        return jsonify_form(form, submit=_('Send'))
 
     def _send_emails(self, form, recipients):
         for recipient in recipients:

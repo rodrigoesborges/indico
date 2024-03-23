@@ -37,7 +37,8 @@
                                 <td class="i-table">
                                     <input class="select-row" type="checkbox" name="registration_id"
                                            value="{{ registration.id }}"
-                                           data-has-files="{{ registration.has_files | tojson }}">
+                                           data-has-files="{{ registration.has_files | tojson }}"
+                                           data-has-documents="{{ (registration.num_receipt_files > 0) | tojson }}">
                                 </td>
                                 {{ template_hook('registration-status-flag', regform=regform, registration=registration, header=false) }}
                                 <td class="i-table">
@@ -104,8 +105,21 @@
                                                 {%- trans %}No{% endtrans -%}
                                             {% endif %}
                                         </td>
+                                    {% elif item.id == 'receipts_present' %}
+                                        <td class="i-table">
+                                            {% if registration.num_receipt_files %}
+                                                {%- trans %}Yes{% endtrans %} ({{ registration.num_receipt_files }})
+                                            {% else %}
+                                                {%- trans %}No{% endtrans -%}
+                                            {% endif %}
+                                        </td>
                                     {% else %}
-                                        <td class="i-table">{{ data[item.id].friendly_data if item.id in data }}</td>
+                                        {% set search_value = data[item.id].search_data if item.id in data else '' %}
+                                        <td class="i-table" data-text="{{ search_value }}">
+                                            {%- if item.id in data and data[item.id].friendly_data %}
+                                                {{- data[item.id].friendly_data }}
+                                            {%- endif %}
+                                        </td>
                                     {% endif %}
                                 {% endfor %}
                                 {% for item in dynamic_columns %}

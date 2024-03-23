@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -323,10 +323,10 @@ class RHVCManageSearch(RHVCManageEventCreateBase):
                  .join(VCRoomEventAssociation)
                  # Plugins might add eager-loaded extensions to the table - since we cannot group by them
                  # we need to make sure everything is lazy-loaded here.
-                 .options((lazyload(r) for r in inspect(VCRoom).relationships.keys()),
+                 .options((lazyload(r) for r in inspect(VCRoom).relationships.keys()),  # noqa: SIM118
                           joinedload('events').joinedload('event').joinedload('acl_entries'))
                  .group_by(VCRoom.id)
-                 .order_by(db.desc('event_count'))
+                 .order_by(func.lower(VCRoom.name) != self.query.lower(), db.desc('event_count'))
                  .limit(10))
 
         return ((room, count) for room, count in query if room.plugin.can_manage_vc_room(session.user, room))

@@ -1,17 +1,22 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
+import dataclasses
 import itertools
 import os
 import uuid
+from collections import defaultdict
+from contextlib import contextmanager
 from io import BytesIO
 from operator import attrgetter
 
+from babel.numbers import format_currency
 from flask import flash, jsonify, redirect, render_template, request, session
+from pypdf import PdfWriter
 from sqlalchemy.orm import joinedload, subqueryload
 from webargs import fields
 from werkzeug.exceptions import BadRequest, Forbidden, NotFound
@@ -28,8 +33,7 @@ from indico.modules.designer import PageLayout, TemplateType
 from indico.modules.designer.models.templates import DesignerTemplate
 from indico.modules.designer.util import get_badge_format, get_inherited_templates
 from indico.modules.events import EventLogRealm
-from indico.modules.events.payment.models.transactions import TransactionAction
-from indico.modules.events.payment.util import register_transaction
+from indico.modules.events.payment.util import toggle_registration_payment
 from indico.modules.events.registration import logger
 from indico.modules.events.registration.badges import (RegistrantsListToBadgesPDF,
                                                        RegistrantsListToBadgesPDFDoubleSided,
@@ -38,11 +42,13 @@ from indico.modules.events.registration.controllers import RegistrationEditMixin
 from indico.modules.events.registration.controllers.management import (RHManageRegFormBase, RHManageRegFormsBase,
                                                                        RHManageRegistrationBase)
 from indico.modules.events.registration.forms import (BadgeSettingsForm, CreateMultipleRegistrationsForm,
-                                                      EmailRegistrantsForm, ImportRegistrationsForm,
-                                                      RejectRegistrantsForm)
+                                                      EmailRegistrantsForm, ImportRegistrationsForm, PublishReceiptForm,
+                                                      RegistrationBasePriceForm,
+                                                      RegistrationExceptionalModificationForm, RejectRegistrantsForm)
 from indico.modules.events.registration.models.items import PersonalDataType, RegistrationFormItemType
 from indico.modules.events.registration.models.registrations import Registration, RegistrationData, RegistrationState
-from indico.modules.events.registration.notifications import notify_registration_state_update
+from indico.modules.events.registration.notifications import (notify_registration_receipt_created,
+                                                              notify_registration_state_update)
 from indico.modules.events.registration.settings import event_badge_settings
 from indico.modules.events.registration.util import (ActionMenuEntry, create_registration,
                                                      generate_spreadsheet_from_registrations,
@@ -52,6 +58,9 @@ from indico.modules.events.registration.util import (ActionMenuEntry, create_reg
 from indico.modules.events.registration.views import WPManageRegistration
 from indico.modules.events.util import ZipGeneratorMixin
 from indico.modules.logs import LogKind
+from indico.modules.logs.util import make_diff_log
+from indico.modules.receipts.models.files import ReceiptFile
+from indico.util.date_time import now_utc, relativedelta
 from indico.util.fs import secure_filename
 from indico.util.i18n import _, ngettext
 from indico.util.marshmallow import Principal
@@ -61,6 +70,7 @@ from indico.util.spreadsheets import send_csv, send_xlsx
 from indico.web.args import parser, use_kwargs
 from indico.web.flask.templating import get_template_module
 from indico.web.flask.util import send_file, url_for
+from indico.web.forms.base import FormDefaults
 from indico.web.util import jsonify_data, jsonify_form, jsonify_template
 
 
@@ -137,6 +147,15 @@ class RHRegistrationsListManage(RHManageRegFormBase):
                 'ticket',
                 url=url_for('.registrations_config_tickets', regform),
                 weight=80,
+            ))
+
+        if event.has_feature('payment'):
+            action_menu_items.append(ActionMenuEntry(
+                _('Update Registration Fee'),
+                'coins',
+                url=url_for('.registrations_update_price', regform),
+                weight=40,
+                reload_page=True
             ))
 
         action_menu_items = sorted(
@@ -280,8 +299,10 @@ class RHRegistrationEmailRegistrants(RHRegistrationsActionBase):
                 template = get_template_module('events/registration/emails/custom_email.html',
                                                email_subject=email_subject, email_body=email_body)
                 bcc = [session.user.email] if form.copy_for_sender.data else []
+                ticket_template = self.regform.get_ticket_template()
+                is_ticket_blocked = ticket_template.is_ticket and registration.is_ticket_blocked
                 attach_ticket = (
-                    'attach_ticket' in form and form.attach_ticket.data and not registration.is_ticket_blocked
+                    'attach_ticket' in form and form.attach_ticket.data and not is_ticket_blocked
                 )
                 attachments = get_ticket_attachments(registration) if attach_ticket else None
                 email = make_email(to_list=registration.email, cc_list=form.cc_addresses.data, bcc_list=bcc,
@@ -308,7 +329,8 @@ class RHRegistrationEmailRegistrants(RHRegistrationsActionBase):
                            '{num} emails were sent.', num_emails_sent).format(num=num_emails_sent), 'success')
             return jsonify_data()
 
-        registrations_without_ticket = [r for r in self.registrations if r.is_ticket_blocked]
+        template_is_ticket = self.regform.get_ticket_template().is_ticket
+        registrations_without_ticket = [r for r in self.registrations if template_is_ticket and r.is_ticket_blocked]
         return jsonify_template('events/registration/management/email.html', form=form, regform=self.regform,
                                 all_registrations_count=len(self.registrations),
                                 registrations_without_ticket_count=len(registrations_without_ticket))
@@ -600,15 +622,7 @@ class RHRegistrationTogglePayment(RHManageRegistrationBase):
     def _process(self):
         pay = request.form.get('pay') == '1'
         if pay != self.registration.is_paid:
-            currency = self.registration.currency if pay else self.registration.transaction.currency
-            amount = self.registration.price if pay else self.registration.transaction.amount
-            action = TransactionAction.complete if pay else TransactionAction.cancel
-            register_transaction(registration=self.registration,
-                                 amount=amount,
-                                 currency=currency,
-                                 action=action,
-                                 data={'changed_by_name': session.user.full_name,
-                                       'changed_by_id': session.user.id})
+            toggle_registration_payment(self.registration, paid=pay)
         return jsonify_data(html=_render_registration_details(self.registration))
 
 
@@ -621,7 +635,8 @@ def _modify_registration_status(registration, approve, rejection_reason='', atta
         registration.rejection_reason = rejection_reason
         registration.update_state(rejected=True)
     db.session.flush()
-    notify_registration_state_update(registration, attach_rejection_reason)
+    notify_registration_state_update(registration, attach_rejection_reason=attach_rejection_reason,
+                                     from_management=True)
     status = 'approved' if approve else 'rejected'
     logger.info('Registration %s was %s by %s', registration, status, session.user)
 
@@ -661,7 +676,7 @@ class RHRegistrationReset(RHManageRegistrationBase):
             self.registration.update_state(rejected=False)
         elif self.registration.state == RegistrationState.withdrawn:
             self.registration.update_state(withdrawn=False)
-            notify_registration_state_update(self.registration)
+            notify_registration_state_update(self.registration, from_management=True)
         else:
             raise BadRequest(_('The registration cannot be reset in its current state.'))
         self.registration.checked_in = False
@@ -702,7 +717,38 @@ class RHRegistrationManageWithdraw(RHManageRegistrationBase):
         self.registration.update_state(withdrawn=True)
         flash(_('The registration has been withdrawn.'), 'success')
         logger.info('Registration %r was withdrawn by %r', self.registration, session.user)
-        notify_registration_state_update(self.registration)
+        notify_registration_state_update(self.registration, from_management=True)
+        return jsonify_data(html=_render_registration_details(self.registration))
+
+
+class RHRegistrationScheduleModification(RHManageRegistrationBase):
+    """Let a manager schedule the registration modification deadline."""
+
+    def _process(self):
+        default_modification_end_dt = now_utc() + relativedelta(weeks=1)
+        modification_form_defaults = FormDefaults(modification_end_dt=default_modification_end_dt)
+        form = RegistrationExceptionalModificationForm(regform=self.regform, obj=modification_form_defaults)
+
+        if form.validate_on_submit():
+            self.registration.modification_end_dt = form.modification_end_dt.data
+            flash(_('Deadline for registration modification has been scheduled'), 'success')
+            self.registration.log(EventLogRealm.management, LogKind.change, 'Registration',
+                                  (f'Modification deadline updated for user: {self.registration.email}',
+                                   f' until: {self.registration.modification_end_dt}'),
+                                  session.user,
+                                  data={'Modification': self.registration.can_be_modified})
+            return jsonify_data(html=_render_registration_details(self.registration))
+        return jsonify_form(form, disabled_until_change=False)
+
+
+class RHRegistrationRemoveModification(RHManageRegistrationBase):
+    """Let a manager close modification for a registration."""
+
+    def _process(self):
+        self.registration.modification_end_dt = None
+        self.registration.log(EventLogRealm.management, LogKind.change, 'Registration',
+                              f'Modification closed for user: {self.registration.email}', session.user,
+                              data={'Modification': self.registration.can_be_modified})
         return jsonify_data(html=_render_registration_details(self.registration))
 
 
@@ -763,14 +809,79 @@ class RHRegistrationsReject(RHRegistrationsActionBase):
         return jsonify_form(form, disabled_until_change=False, submit=_('Reject'), message=message)
 
 
-class RHRegistrationsExportAttachments(RHRegistrationsExportBase, ZipGeneratorMixin):
+class RHRegistrationsBasePrice(RHRegistrationsActionBase):
+    """Edit the base price of the selected registrations."""
+
+    def _process(self):
+        form = RegistrationBasePriceForm(base_price=self.regform.base_price, currency=self.regform.currency,
+                                         registration_id=[reg.id for reg in self.registrations])
+        if form.validate_on_submit():
+            log_fields = {
+                'base_price': {'title': 'Registration Fee', 'type': 'string'},
+                'state': 'State'
+            }
+            num_skipped = 0
+            num_updates = 0
+            for reg in self.registrations:
+                prev_state = reg.state
+                if form.apply_complete.data and reg.state == RegistrationState.complete and not reg.base_price:
+                    reg.state = RegistrationState.unpaid
+                elif reg.state != RegistrationState.unpaid:
+                    num_skipped += 1
+                    continue
+                new_price = {
+                    'remove': 0,
+                    'default': self.regform.base_price,
+                    'custom': form.base_price.data
+                }[form.action.data]
+                changes = {}
+                if reg.base_price != new_price or reg.currency != self.regform.currency:
+                    changes['base_price'] = (format_currency(reg.base_price, reg.currency, locale='en_GB'),
+                                             format_currency(new_price, self.regform.currency, locale='en_GB'))
+                    reg.base_price = new_price
+                    reg.currency = self.regform.currency
+                if not reg.price:
+                    reg.state = RegistrationState.complete
+                if prev_state != reg.state:
+                    changes['state'] = (prev_state, reg.state)
+                    signals.event.registration_state_updated.send(reg, previous_state=prev_state, silent=True)
+                    notify_registration_state_update(reg, from_management=True)
+                if changes:
+                    reg.log(EventLogRealm.management, LogKind.change, 'Registration',
+                            f'Registration fee updated: {reg.full_name}',
+                            session.user, data={'Changes': make_diff_log(changes, log_fields)})
+                    num_updates += 1
+            db.session.flush()
+            # we count an update as a success even if nothing has changed
+            num_successes = len(self.registrations) - num_skipped
+            if num_successes:
+                flash(ngettext('Registration fee has been updated for {} registration.',
+                               'Registration fee has been updated for {} registrations.',
+                               num_successes).format(num_successes), 'success')
+            if num_updates:
+                logger.info('%r registrations had their fee changed by %r', num_updates, session.user)
+            if num_skipped:
+                if form.apply_complete.data:
+                    msg = ngettext('{} registration was skipped because its fee is not zero or it is in an invalid '
+                                   'state.', '{} registrations were skipped because their fees are not zero or they '
+                                   'are in an invalid state.', num_skipped)
+                else:
+                    msg = ngettext('{} registration was skipped because it is not in the unpaid state.',
+                                   '{} registrations were skipped because they are not in the unpaid state.',
+                                   num_skipped)
+                flash(msg.format(num_skipped), 'warning')
+            return jsonify_data(flash=False)
+        return jsonify_form(form, disabled_until_change=False)
+
+
+class RHRegistrationsExportAttachments(ZipGeneratorMixin, RHRegistrationsExportBase):
     """Export registration attachments in a zip file."""
 
     def _prepare_folder_structure(self, attachment):
         registration = attachment.registration
         regform_title = secure_filename(attachment.registration.registration_form.title, 'registration_form')
-        registrant_name = secure_filename('{}_{}'.format(registration.get_full_name(),
-                                          str(registration.friendly_id)), registration.friendly_id)
+        registrant_name = secure_filename(f'{registration.get_full_name()}_{registration.friendly_id!s}',
+                                          registration.friendly_id)
         file_name = secure_filename('{}_{}_{}'.format(attachment.field_data.field.title, attachment.field_data.field_id,
                                                       attachment.filename), attachment.filename)
         return os.path.join(*self._adjust_path_length([regform_title, registrant_name, file_name]))
@@ -789,3 +900,168 @@ class RHRegistrationsExportAttachments(RHRegistrationsExportBase, ZipGeneratorMi
             if attachments_for_registration:
                 attachments[registration.id] = attachments_for_registration
         return self._generate_zip_file(attachments, name_prefix='attachments', name_suffix=self.regform.id)
+
+
+@dataclasses.dataclass
+class _FileWrapper:
+    content: BytesIO
+    filename: str
+
+
+# TODO: Try to merge this with RHExportReceipts (and maybe use a nice react dialog
+# to choose what to export). This would allow to get rid of all the ugly hacks to
+# merge the PDFs and then feed them to the with the ZIP generator.
+# It would also allow users to actually choose receipts from which template they
+# want to export instead of always exporting everything, and maybe even an option
+# to filter based on the 'published' flag.
+class RHRegistrationsExportReceipts(ZipGeneratorMixin, RHRegistrationsActionBase):
+    """Export registration receipts in a zip file."""
+
+    ALLOW_LOCKED = True
+
+    def _prepare_folder_structure(self, data):
+        if isinstance(data, _FileWrapper):
+            return os.path.join(*self._adjust_path_length([data.filename]))
+        else:
+            template_prefixes, file = data
+            reg = file.receipt_file.registration
+            registrant_name = f'{reg.get_full_name()}_{reg.friendly_id}'
+            file_name = secure_filename(f'{registrant_name}_{file.id}_{file.filename}', f'{file.id}_document.pdf')
+            return os.path.join(*self._adjust_path_length([*template_prefixes, file_name]))
+
+    def _iter_items(self, receipts_by_template):
+        for template, receipts in receipts_by_template.items():
+            if not self.combined:
+                for receipt in receipts:
+                    yield [f'{template.title}-{template.id}'], receipt.file
+                continue
+            output = PdfWriter()
+            for receipt in receipts:
+                with receipt.file.open() as fd:
+                    output.append(fd)
+            outputbuf = BytesIO()
+            output.write(outputbuf)
+            outputbuf.seek(0)
+            yield _FileWrapper(outputbuf, f'{template.title}-{template.id}.pdf')
+
+    @contextmanager
+    def _get_item_path(self, item):
+        if isinstance(item, _FileWrapper):
+            yield item.content
+            return
+
+        with item[1].get_local_path() as path:
+            yield path
+
+    @use_kwargs({
+        'combined': fields.Bool(load_default=False),
+    }, location='query')
+    def _process_args(self, combined):
+        RHRegistrationsExportBase._process_args(self)
+        self.combined = combined
+        receipts = (ReceiptFile.query
+                    .filter(~ReceiptFile.is_deleted,
+                            ReceiptFile.registration_id.in_(r.id for r in self.registrations))
+                    .order_by(ReceiptFile.template_id,
+                              ReceiptFile.registration_id,
+                              ReceiptFile.file_id)
+                    .all())
+        self.receipts_by_template = defaultdict(list)
+        for receipt in receipts:
+            self.receipts_by_template[receipt.template].append(receipt)
+
+    def _process(self):
+        if self.combined and len(self.receipts_by_template) == 1:
+            receipts = next(iter(self.receipts_by_template.values()))
+            output = PdfWriter()
+            for receipt in receipts:
+                with receipt.file.open() as fd:
+                    output.append(fd)
+            outputbuf = BytesIO()
+            output.write(outputbuf)
+            outputbuf.seek(0)
+            return send_file('documents.pdf', outputbuf, 'application/pdf')
+
+        return self._generate_zip_file(self.receipts_by_template, 'documents')
+
+
+class RHManageReceiptBase(RHManageRegistrationBase):
+    normalize_url_spec = {
+        'locators': {
+            lambda self: self.receipt_file
+        }
+    }
+
+    def _process_args(self):
+        RHManageRegistrationBase._process_args(self)
+        self.receipt_file = (ReceiptFile.query
+                             .with_parent(self.registration)
+                             .filter_by(file_id=request.view_args['file_id'])
+                             .first_or_404())
+
+    def _render_receipts_list(self):
+        tpl_summary = get_template_module('events/registration/display/_registration_summary_blocks.html')
+        return tpl_summary.render_receipts_list(self.registration, from_management=True)
+
+
+class RHDownloadReceipt(RHManageReceiptBase):
+    """Download a receipt file from a registration."""
+
+    normalize_url_spec = {
+        'locators': {
+            lambda self: self.receipt_file.locator.filename
+        }
+    }
+
+    def _process(self):
+        return self.receipt_file.file.send()
+
+
+class RHPublishReceipt(RHManageReceiptBase):
+    """Publish a receipt to a registration."""
+
+    def _process(self):
+        if self.receipt_file.is_published:
+            return jsonify_data()
+        form = PublishReceiptForm()
+        if form.validate_on_submit():
+            self.receipt_file.is_published = True
+            flash(_("Document '{}' successfully published").format(self.receipt_file.file.filename), 'success')
+            logger.info('Document %r from registration %r was published by %r', self.receipt_file.file.filename,
+                        self.registration, session.user)
+            notify_registration_receipt_created(self.registration, self.receipt_file,
+                                                notify_user=form.notify_user.data)
+            self.registration.log(EventLogRealm.management, LogKind.change, 'Documents',
+                                  f'Document "{self.receipt_file.file.filename}" published', session.user,
+                                  data={'Notified': form.notify_user.data})
+            return jsonify_data(html=self._render_receipts_list())
+        return jsonify_form(form, submit=_('Publish'), back=_('Cancel'), footer_align_right=True,
+                            disabled_until_change=False)
+
+
+class RHUnpublishReceipt(RHManageReceiptBase):
+    """Unpublish a receipt from a registration."""
+
+    def _process(self):
+        if not self.receipt_file.is_published:
+            return jsonify_data()
+        self.receipt_file.is_published = False
+        flash(_("Document '{}' successfully unpublished").format(self.receipt_file.file.filename), 'success')
+        logger.info('Document %r from registration %r was unpublished by %r', self.receipt_file.file.filename,
+                    self.registration, session.user)
+        self.registration.log(EventLogRealm.management, LogKind.change, 'Documents',
+                              f'Document "{self.receipt_file.file.filename}" unpublished', session.user)
+        return jsonify_data(html=self._render_receipts_list())
+
+
+class RHDeleteReceipt(RHManageReceiptBase):
+    """Delete a receipt from a registration."""
+
+    def _process(self):
+        self.receipt_file.is_deleted = True
+        db.session.flush()
+        logger.info('Document file %s deleted by %s', self.receipt_file, session.user)
+        self.registration.log(EventLogRealm.management, LogKind.negative, 'Documents',
+                              f'Document "{self.receipt_file.file.filename}" deleted', session.user)
+        flash(_("Document '{}' successfully deleted").format(self.receipt_file.file.filename), 'success')
+        return jsonify_data(html=self._render_receipts_list())

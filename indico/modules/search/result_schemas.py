@@ -1,11 +1,9 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
-
-import typing as t
 
 from marshmallow import EXCLUDE, ValidationError, fields
 from marshmallow_enum import EnumField
@@ -278,7 +276,7 @@ class AggregationSchema(_ResultSchemaBase):
     #: The name of the aggregation.
     label: str = fields.String(required=True)
     #: A bucket list representing each group.
-    buckets: t.List[BucketSchema] = fields.List(fields.Nested(BucketSchema), required=True)
+    buckets: list[BucketSchema] = fields.List(fields.Nested(BucketSchema), required=True)
 
 
 class ResultItemSchema(OneOfSchema):

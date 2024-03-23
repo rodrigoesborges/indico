@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -26,6 +26,8 @@ from indico.core.db.sqlalchemy import PyIntEnum, UTCDateTime
 from indico.core.db.sqlalchemy.util.queries import increment_and_get
 from indico.core.storage import StoredFileMixin
 from indico.modules.events.payment.models.transactions import TransactionStatus
+from indico.modules.events.registration.google_wallet import GoogleWalletManager
+from indico.modules.events.registration.models.items import PersonalDataType
 from indico.modules.users.models.users import format_display_full_name
 from indico.util.date_time import now_utc
 from indico.util.decorators import classproperty
@@ -94,6 +96,7 @@ class RegistrationVisibility(RichIntEnum):
 
 class Registration(db.Model):
     """Somebody's registration for an event through a registration form."""
+
     __tablename__ = 'registrations'
     __table_args__ = (db.CheckConstraint('email = lower(email)', 'lowercase_email'),
                       db.Index(None, 'friendly_id', 'event_id', unique=True,
@@ -247,6 +250,11 @@ class Registration(db.Model):
         nullable=False,
         default=False
     )
+    #: The date/time until which the person can modify their registration
+    modification_end_dt = db.Column(
+        UTCDateTime,
+        nullable=True
+    )
 
     #: The Event containing this registration
     event = db.relationship(
@@ -299,6 +307,7 @@ class Registration(db.Model):
     # relationship backrefs:
     # - invitation (RegistrationInvitation.registration)
     # - legacy_mapping (LegacyRegistrationMapping.registration)
+    # - receipt_files (ReceiptFile.registration)
     # - registration_form (RegistrationForm.registrations)
     # - transactions (PaymentTransaction.registration)
 
@@ -407,9 +416,14 @@ class Registration(db.Model):
         return dict(self.registration_form.locator, token=self.uuid)
 
     @property
+    def modification_deadline_passed(self):
+        if self.modification_end_dt is None:
+            return True
+        return self.modification_end_dt < now_utc()
+
+    @property
     def can_be_modified(self):
-        regform = self.registration_form
-        return regform.is_modification_open and regform.is_modification_allowed(self)
+        return self.registration_form.is_modification_allowed(self)
 
     @property
     def can_be_withdrawn(self):
@@ -462,6 +476,10 @@ class Registration(db.Model):
     def is_ticket_blocked(self):
         """Check whether the ticket is blocked by a plugin."""
         return any(values_from_signal(signals.event.is_ticket_blocked.send(self), single_value=True))
+
+    @property
+    def google_wallet_ticket_id(self):
+        return f'Ticket-{self.event_id}-{self.registration_form_id}-{self.id}'
 
     @property
     def is_paid(self):
@@ -560,6 +578,10 @@ class Registration(db.Model):
                  .filter(RegistrationFormFieldData.field.has(input_type='accompanying_persons')))
         return list(itertools.chain.from_iterable(d.data for d in query.all() if not d.field_data.field.is_deleted))
 
+    @property
+    def published_receipts(self):
+        return [receipt for receipt in self.receipt_files if receipt.is_published]
+
     @classproperty
     @classmethod
     def order_by_name(cls):
@@ -586,6 +608,8 @@ class Registration(db.Model):
                                 abbrev_first_name=abbrev_first_name)
 
     def get_personal_data(self):
+        # the personal data picture is not included in this method since it's rather
+        # useless here. use `get_personal_data_picture` to get it when needed
         personal_data = {}
         for data in self.data:
             field = data.field_data.field
@@ -597,8 +621,17 @@ class Registration(db.Model):
         personal_data.setdefault('email', self.email)
         return personal_data
 
+    def get_personal_data_picture(self):
+        for data in self.data:
+            if data.field_data.field.personal_data_type == PersonalDataType.picture:
+                return data if data.filename else None
+        return None
+
     def _render_price(self, price):
-        return format_currency(price, self.currency, locale=session.lang or 'en_GB')
+        locale = 'en_GB'
+        if has_request_context():
+            locale = session.lang or 'en_GB'
+        return format_currency(price, self.currency, locale=locale)
 
     def render_price(self):
         return self._render_price(self.price)
@@ -717,6 +750,14 @@ class Registration(db.Model):
             return False
         return self.transaction.is_pending_expired()
 
+    def generate_ticket_google_wallet_url(self):
+        """Return link to Google Wallet ticket display."""
+        if not self.registration_form.ticket_google_wallet:
+            return None
+        gwm = GoogleWalletManager(self.event)
+        if gwm.configured:
+            return gwm.get_ticket_link(self)
+
 
 class RegistrationData(StoredFileMixin, db.Model):
     """Data entry within a registration for a field in a registration form."""
@@ -775,6 +816,14 @@ class RegistrationData(StoredFileMixin, db.Model):
             raise Exception('The file locator is only available if there is a file.')
         return dict(self.registration.locator, field_data_id=self.field_data_id, filename=self.filename)
 
+    @locator.registrant_file
+    def locator(self):
+        """A locator that points to the associated file for a registrant."""
+        if not self.filename:
+            raise Exception('The file locator is only available if there is a file.')
+        return dict(self.registration.locator.registrant, registration_id=self.registration.id,
+                    field_data_id=self.field_data_id, filename=self.filename)
+
     @property
     def friendly_data(self):
         return self.get_friendly_data()
@@ -828,7 +877,7 @@ class RegistrationData(StoredFileMixin, db.Model):
         assert None not in path_segments
         # add timestamp in case someone uploads the same file again
         filename = '{}-{}-{}'.format(self.field_data.field_id, int(time.time()), secure_filename(self.filename, 'file'))
-        path = posixpath.join(*(path_segments + [filename]))
+        path = posixpath.join(*path_segments, filename)
         return config.ATTACHMENT_STORAGE, path
 
     def _render_price(self, price):
@@ -842,6 +891,7 @@ class RegistrationData(StoredFileMixin, db.Model):
 def _mapper_configured():
     from indico.modules.events.registration.models.form_fields import RegistrationFormFieldData
     from indico.modules.events.registration.models.items import RegistrationFormItem
+    from indico.modules.receipts.models.files import ReceiptFile
 
     @listens_for(Registration.registration_form, 'set')
     def _set_event_id(target, value, *unused):
@@ -859,11 +909,29 @@ def _mapper_configured():
         value.registration = target
 
     query = (select([db.func.coalesce(db.func.sum(db.func.jsonb_array_length(RegistrationData.data)), 0) + 1])
-             .where(db.and_((RegistrationData.registration_id == Registration.id),
-                            (RegistrationData.field_data_id == RegistrationFormFieldData.id),
-                            (RegistrationFormFieldData.field_id == RegistrationFormItem.id),
-                            (RegistrationFormItem.input_type == 'accompanying_persons'),
+             .where(db.and_(RegistrationData.registration_id == Registration.id,
+                            RegistrationData.field_data_id == RegistrationFormFieldData.id,
+                            RegistrationFormFieldData.field_id == RegistrationFormItem.id,
+                            RegistrationFormItem.input_type == 'accompanying_persons',
+                            ~RegistrationFormItem.is_deleted,
                             db.cast(RegistrationFormItem.data['persons_count_against_limit'].astext, db.Boolean)))
              .correlate_except(RegistrationData)
              .scalar_subquery())
     Registration.occupied_slots = column_property(query, deferred=True)
+
+    query = (select([db.func.coalesce(db.func.sum(db.func.jsonb_array_length(RegistrationData.data)), 0)])
+             .where(db.and_(RegistrationData.registration_id == Registration.id,
+                            RegistrationData.field_data_id == RegistrationFormFieldData.id,
+                            RegistrationFormFieldData.field_id == RegistrationFormItem.id,
+                            RegistrationFormItem.input_type == 'accompanying_persons',
+                            ~RegistrationFormItem.is_deleted))
+             .correlate_except(RegistrationData)
+             .scalar_subquery())
+    Registration.num_accompanying_persons = column_property(query, deferred=True)
+
+    query = (select([db.func.coalesce(db.func.count(ReceiptFile.file_id), 0)])
+             .where(db.and_(ReceiptFile.registration_id == Registration.id,
+                            ~ReceiptFile.is_deleted))
+             .correlate_except(ReceiptFile)
+             .scalar_subquery())
+    Registration.num_receipt_files = column_property(query, deferred=True)

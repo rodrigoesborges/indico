@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -16,6 +16,7 @@ from sqlalchemy.ext.hybrid import hybrid_method, hybrid_property
 from sqlalchemy.orm import column_property, subqueryload
 from werkzeug.exceptions import BadRequest
 
+from indico.core.config import config
 from indico.core.db import db
 from indico.core.db.sqlalchemy import PyIntEnum, UTCDateTime
 from indico.core.db.sqlalchemy.principals import PrincipalType
@@ -27,6 +28,7 @@ from indico.util.caching import memoize_request
 from indico.util.date_time import now_utc
 from indico.util.enum import RichIntEnum
 from indico.util.i18n import L_
+from indico.util.string import format_repr
 
 
 class ModificationMode(RichIntEnum):
@@ -229,6 +231,12 @@ class RegistrationForm(db.Model):
         nullable=False,
         default=False
     )
+    #: Whether to allow exporting tickets to Google Wallet
+    ticket_google_wallet = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False
+    )
     #: Whether to send tickets by e-mail
     ticket_on_email = db.Column(
         db.Boolean,
@@ -333,6 +341,7 @@ class RegistrationForm(db.Model):
     )
 
     # relationship backrefs:
+    # - designer_templates (DesignerTemplate.registration_form)
     # - in_attachment_acls (AttachmentPrincipal.registration_form)
     # - in_attachment_folder_acls (AttachmentFolderPrincipal.registration_form)
     # - in_contribution_acls (ContributionPrincipal.registration_form)
@@ -457,9 +466,18 @@ class RegistrationForm(db.Model):
                 .all())
 
     @property
+    def checked_in_registrations(self):
+        return (Registration.query.with_parent(self)
+                .filter(Registration.checked_in)
+                .options(subqueryload('data'))
+                .all())
+
+    @property
     def needs_publish_consent(self):
-        return (self.publish_registrations_participants == PublishRegistrationsMode.show_with_consent or
-                self.publish_registrations_public == PublishRegistrationsMode.show_with_consent)
+        return (
+            self.publish_registrations_participants == PublishRegistrationsMode.show_with_consent or  # noqa: PLR1714
+            self.publish_registrations_public == PublishRegistrationsMode.show_with_consent
+        )
 
     @hybrid_method
     def is_participant_list_visible(self, is_participant):
@@ -476,12 +494,19 @@ class RegistrationForm(db.Model):
         return ~cls.is_deleted & (cls.publish_registrations_public != PublishRegistrationsMode.hide_all)
 
     def __repr__(self):
-        return f'<RegistrationForm({self.id}, {self.event_id}, {self.title})>'
+        return format_repr(self, 'id', 'event_id', is_deleted=False, _text=self.title)
 
     def is_modification_allowed(self, registration):
         """Check whether a registration may be modified."""
         if not registration.is_active:
             return False
+        # Exceptional modification permissions on the registration always allows modification
+        elif registration.modification_end_dt is not None and not registration.modification_deadline_passed:
+            return True
+        # Any other modification requires the registration form's deadline to be unsed or in the future
+        elif not self.is_modification_open:
+            return False
+        # And of course the configured modification restrictions need to be met as well
         elif self.modification_mode == ModificationMode.allowed_always:
             return True
         elif self.modification_mode == ModificationMode.allowed_until_approved:
@@ -509,6 +534,21 @@ class RegistrationForm(db.Model):
             return Registration.query.with_parent(self).filter_by(uuid=uuid).filter(~Registration.is_deleted).first()
         if email:
             return Registration.query.with_parent(self).filter_by(email=email).filter(~Registration.is_deleted).first()
+
+    def get_ticket_template(self):
+        """Get the current ticket template or, if not set, the default category one."""
+        from indico.modules.designer.util import get_default_ticket_on_category
+        return self.ticket_template or get_default_ticket_on_category(self.event.category)
+
+    @property
+    def is_google_wallet_configured(self):
+        if not config.ENABLE_GOOGLE_WALLET or self.event.is_unlisted:
+            return False
+        return self.event.category.effective_google_wallet_config is not None
+
+    @property
+    def is_google_wallet_available(self):
+        return self.ticket_google_wallet and self.is_google_wallet_configured
 
     def render_base_price(self):
         return format_currency(self.base_price, self.currency, locale=session.lang or 'en_GB')
@@ -538,3 +578,11 @@ def _mappers_configured():
              .correlate_except(Registration)
              .scalar_subquery())
     RegistrationForm.existing_registrations_count = column_property(query, deferred=True)
+
+    query = (select([db.func.coalesce(db.func.sum(Registration.occupied_slots), 0)])
+             .where(db.and_(Registration.registration_form_id == RegistrationForm.id,
+                            ~Registration.is_deleted,
+                            Registration.checked_in))
+             .correlate_except(Registration)
+             .scalar_subquery())
+    RegistrationForm.checked_in_registrations_count = column_property(query, deferred=True)

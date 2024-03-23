@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -204,22 +204,24 @@ export function renderRecurrence({type, number, interval}, shortcut = true) {
 }
 
 export function getRecurrenceInfo(repetition) {
-  const [repeatFrequency, repeatInterval] = repetition;
+  const [repeatFrequency, repeatInterval, recurrenceWeekdays] = repetition;
   let type = 'single';
   let number = '1';
   let interval = 'week';
+  let weekdays = [];
   if (repeatFrequency === 1) {
     type = 'daily';
   } else if (repeatFrequency === 2) {
     type = 'every';
     interval = 'week';
     number = repeatInterval;
+    weekdays = recurrenceWeekdays;
   } else if (repeatFrequency === 3) {
     type = 'every';
     interval = 'month';
     number = repeatInterval;
   }
-  return {type, number, interval};
+  return {type, number, interval, weekdays};
 }
 
 export function serializeRecurrenceInfo({type, number, interval}) {
@@ -232,6 +234,46 @@ export function serializeRecurrenceInfo({type, number, interval}) {
   } else if (interval === 'month') {
     return ['MONTH', number];
   }
+}
+
+/**
+ * Renders the array of recurrence weekdays into a nicely formatted string
+ * @param {array} weekdays Array of weekdays
+ * @returns {string} Formatted string of weekdays
+ */
+export function renderRecurrenceWeekdays(weekdays) {
+  const weekdaysMap = {
+    mon: moment.weekdays(1),
+    tue: moment.weekdays(2),
+    wed: moment.weekdays(3),
+    thu: moment.weekdays(4),
+    fri: moment.weekdays(5),
+    sat: moment.weekdays(6),
+    sun: moment.weekdays(0),
+  };
+
+  if (weekdays === null || weekdays.length === 0) {
+    return null;
+  }
+
+  // handle unknown/bad weekdays
+  if (weekdays.some(weekday => !Object.keys(weekdaysMap).includes(weekday))) {
+    return null;
+  }
+
+  const orderedWeekdays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+  // sort the weekdays based on their position in the orderedWeekdays array
+  const sortedWeekdays = weekdays.sort(
+    (a, b) => orderedWeekdays.indexOf(a) - orderedWeekdays.indexOf(b)
+  );
+
+  const formattedWeekdays = new Intl.ListFormat(moment.locale(), {
+    style: 'long',
+    type: 'conjunction',
+  }).format(sortedWeekdays.map(weekday => weekdaysMap[weekday]));
+
+  return formattedWeekdays;
 }
 
 const _legendLabels = {

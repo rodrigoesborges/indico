@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -26,7 +26,8 @@ The signal returns a dictionary which is used to update the item `style`.
 draw_item_on_badge = _signals.signal('draw-item-on-badge', '''
 Called when drawing an item on a badge for a given registration.
 The `registration` object is the sender. The `items`, `self.height`,
-`self.width`, `item_data` and `person` are passed in the kwargs.
+`self.width`, `item_data`, `person` and `template_data` are passed in the kwargs.
 `item_data` is a dictionary containing `item`, `text`, `pos_x` and `pos_y`.
+`template_data` is a namedtuple containing the complete template structure.
 The signal returns a dictionary of updates for the contents of `item_data`.
 ''')

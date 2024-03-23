@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -425,12 +425,12 @@ class Room(ProtectionManagersMixin, db.Model):
         if order:  # pragma: no cover
             query = query.order_by(*order)
 
-        keys = ('room',) + tuple(args)
+        keys = ('room', *args)
         return (dict(zip(keys, row if args else [row])) for row in query)
 
     @staticmethod
-    def filter_available(start_dt, end_dt, repetition, include_blockings=True, include_pre_bookings=True,
-                         include_pending_blockings=False):
+    def filter_available(start_dt, end_dt, repetition, include_blockings=True,
+                         include_pre_bookings=True, include_pending_blockings=False):
         """Return a SQLAlchemy filter criterion ensuring that the room is available during the given time."""
         # Check availability against reservation occurrences
         dummy_occurrences = ReservationOccurrence.create_series(start_dt, end_dt, repetition)
@@ -526,10 +526,10 @@ class Room(ProtectionManagersMixin, db.Model):
 
         criteria = [db.and_(RoomPrincipal.type == PrincipalType.user, RoomPrincipal.user_id == user.id)]
         for group in user.local_groups:
-            criteria.append(db.and_(RoomPrincipal.type == PrincipalType.local_group,
+            criteria.append(db.and_(RoomPrincipal.type == PrincipalType.local_group,  # noqa: PERF401
                                     RoomPrincipal.local_group_id == group.id))
         for group in user.iter_all_multipass_groups():
-            criteria.append(db.and_(RoomPrincipal.type == PrincipalType.multipass_group,
+            criteria.append(db.and_(RoomPrincipal.type == PrincipalType.multipass_group,  # noqa: PERF401
                                     RoomPrincipal.multipass_group_provider == group.provider.name,
                                     db.func.lower(RoomPrincipal.multipass_group_name) == group.name.lower()))
 
@@ -539,7 +539,7 @@ class Room(ProtectionManagersMixin, db.Model):
         non_reservable_rooms = set()
         for room in all_rooms_query:
             is_owner = user == room.owner
-            data[room.id] = {x: False for x in permissions}
+            data[room.id] = dict.fromkeys(permissions, False)
             if room.reservations_need_confirmation:
                 prebooking_required_rooms.add(room.id)
             if not room.is_reservable:

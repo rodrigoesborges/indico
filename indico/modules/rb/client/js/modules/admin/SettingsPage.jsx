@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -23,6 +23,7 @@ import {
   FinalSubmitButton,
   FinalUnloadPrompt,
   validators as v,
+  FinalDropdown,
 } from 'indico/react/forms';
 import {useFavoriteUsers} from 'indico/react/hooks';
 import {PluralTranslate, Translate} from 'indico/react/i18n';
@@ -64,6 +65,21 @@ const SettingsPage = props => {
       </Placeholder>
     );
   }
+
+  const bookingRequiredOptions = [
+    {
+      value: 'always',
+      text: Translate.string('Always'),
+    },
+    {
+      value: 'never',
+      text: Translate.string('Never'),
+    },
+    {
+      value: 'not_for_events',
+      text: Translate.string('Not for events'),
+    },
+  ];
 
   return (
     <>
@@ -119,6 +135,16 @@ const SettingsPage = props => {
                 </Translate>
               }
             />
+            <FinalCheckbox
+              name="hide_module_if_unauthorized"
+              label={Translate.string('Hide the Room Booking system from unauthorized users')}
+              description={
+                <Translate>
+                  If enabled, links to the Room Booking system will not be shown to users who do not
+                  have access to it.
+                </Translate>
+              }
+            />
             <FinalInput
               name="tileserver_url"
               label={Translate.string('Tileserver URL')}
@@ -155,6 +181,14 @@ const SettingsPage = props => {
               label={Translate.string('Max. booking length')}
               description={Translate.string('The maximum length (in days) a booking may last.')}
               validate={v.min(1)}
+            />
+            <FinalDropdown
+              options={bookingRequiredOptions}
+              required
+              selection
+              name="booking_reason_required"
+              label={Translate.string('Booking reason required')}
+              description={Translate.string('Specify when a booking reason must be provided.')}
             />
             <FinalCheckbox
               name="notifications_enabled"
@@ -278,7 +312,10 @@ const SettingsPage = props => {
                 </Translate>
               }
             />
-            <FinalSubmitButton label={Translate.string('Save')} />
+            <FinalSubmitButton
+              label={Translate.string('Save')}
+              style={{marginBottom: '0.875rem'}}
+            />
           </Form>
         )}
       </FinalForm>

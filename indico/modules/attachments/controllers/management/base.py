@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -63,6 +63,7 @@ def _get_folders_protection_info(linked_object):
 
 class ManageAttachmentsMixin:
     """Show the attachment management page."""
+
     wp = None
 
     def _process(self):
@@ -76,8 +77,8 @@ class ManageAttachmentsMixin:
             return jsonify_template('attachments/attachments.html', **tpl_args)
 
 
-class AddAttachmentCKEditorMixin:
-    """Upload image attachment from CKEditor."""
+class AddAttachmentEditorMixin:
+    """Upload image attachment from editor."""
 
     @use_kwargs({'upload': fields.Field(required=True)}, location='files')
     def _process(self, upload):

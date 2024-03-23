@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -19,6 +19,7 @@ from indico.modules.events.timetable.models.entries import TimetableEntry
 from indico.util.iterables import materialize_iterable
 from indico.util.locators import locator_property
 from indico.util.string import format_repr, slugify
+from indico.web.flask.util import url_for
 
 
 class SessionBlock(LocationMixin, db.Model):
@@ -72,7 +73,7 @@ class SessionBlock(LocationMixin, db.Model):
     # relationship backrefs:
     # - contributions (Contribution.session_block)
     # - legacy_mapping (LegacySessionBlockMapping.session_block)
-    # - room_reservation_links (ReservationLink.session_block)
+    # - room_reservation_occurrence_links (ReservationOccurrenceLink.session_block)
     # - session (Session.blocks)
     # - timetable_entry (TimetableEntry.session_block)
     # - vc_room_associations (VCRoomEventAssociation.linked_block)
@@ -119,6 +120,12 @@ class SessionBlock(LocationMixin, db.Model):
     @property
     def full_title(self):
         return f'{self.session.title}: {self.title}' if self.title else self.session.title
+
+    @property
+    def url(self):
+        # There is no block-specific display URL for now, so we use the session's locator
+        # to avoid adding an unused `block_id`` to the query string.
+        return url_for('sessions.display_session', self.session)
 
     def can_manage(self, user, allow_admin=True):
         return self.session.can_manage_blocks(user, allow_admin=allow_admin)
@@ -187,12 +194,12 @@ def _set_duration(target, value, oldvalue, *unused):
 
 @listens_for(SessionBlock.__table__, 'after_create')
 def _add_timetable_consistency_trigger(target, conn, **kw):
-    sql = '''
+    sql = f'''
         CREATE CONSTRAINT TRIGGER consistent_timetable
         AFTER INSERT OR UPDATE OF session_id, duration
-        ON {}
+        ON {target.fullname}
         DEFERRABLE INITIALLY DEFERRED
         FOR EACH ROW
         EXECUTE PROCEDURE events.check_timetable_consistency('session_block');
-    '''.format(target.fullname)
+    '''
     DDL(sql).execute(conn)

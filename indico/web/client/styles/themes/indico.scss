@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -64,7 +64,6 @@ body {
 .item-location {
   @include ellipsis();
 
-  box-sizing: border-box;
   border-radius: 0.2em;
   color: $tt-secondary-color;
   font-size: 1em;
@@ -259,6 +258,15 @@ div.event-header {
     margin-bottom: 0.5em;
   }
 
+  ul,
+  ol {
+    margin-left: 3em;
+  }
+
+  :is(ul, ol) :is(ul, ol) {
+    margin-left: 1.2em;
+  }
+
   @include font-family-modern-body();
   color: $light-black;
 }
@@ -321,7 +329,6 @@ ul.day-list {
       margin: 0.5rem 0.7em 0 0;
       min-width: 4em;
       text-align: right;
-      box-sizing: border-box;
       color: $dark-gray;
 
       &::before {

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -42,7 +42,7 @@ class ColorTuple(namedtuple('ColorTuple', ('text', 'background'))):
                 raise ValueError('Colors must only use hex digits')
         return super().__new__(cls, *colors)
 
-    def __nonzero__(self):
+    def __bool__(self):
         return all(self)
 
     @property

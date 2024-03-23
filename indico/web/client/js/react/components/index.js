@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -28,11 +28,13 @@ export {default as Carousel} from './Carousel';
 export {default as ScrollButton} from './ScrollButton';
 export {default as StickyWithScrollBack} from './StickyWithScrollBack';
 export {default as EmailListField, FinalEmailList} from './EmailListField';
+export {default as PlaceholderInfo} from './PlaceholderInfo';
 export {default as PopoverDropdownMenu} from './PopoverDropdownMenu';
 export {default as ResponsivePopup} from './ResponsivePopup';
 export {default as ListFilter} from './ListFilter';
 export {default as MathJax} from './MathJax';
 export {default as FileSubmission} from './files/FileSubmission';
+export {default as FinalPictureManager} from './pictures/PictureManager';
 export {default as FinalSingleFileManager} from './files/SingleFileManager';
 export {default as ClipboardButton} from './ClipboardButton';
 export {default as RequestConfirm, RequestConfirmDelete} from './RequestConfirm';
@@ -41,7 +43,7 @@ export {default as ManagementPageBackButton} from './ManagementPageBackButton';
 export {default as ManagementPageSubTitle} from './ManagementPageSubTitle';
 export {default as ManagementPageTitle} from './ManagementPageTitle';
 export {default as ManageNotes} from './notes/ManageNotes';
-export {default as TextEditor} from './TextEditor';
+export {default as TinyMCETextEditor, FinalTinyMCETextEditor} from './TinyMCETextEditor';
 export {default as WTFButtonsBooleanField} from './WTFButtonsBooleanField';
 export {default as WTFDateField} from './WTFDateField';
 export {default as WTFDateTimeField} from './WTFDateTimeField';
@@ -54,7 +56,7 @@ export {default as WTFPrincipalListField} from './WTFPrincipalListField';
 export {default as WTFPrincipalField} from './WTFPrincipalField';
 export {default as WTFLinkListField} from './WTFLinkListField';
 export {default as WTFSUIColorPicker} from './WTFSUIColorPicker';
-export {default as WTFRemoteSearchDropdown} from './WTFRemoteSearchDropdown';
+export {default as WTFSearchDropdown, SearchDropdown} from './WTFSearchDropdown';
 export {default as ICSCalendarLink} from './ICSCalendarLink';
 export {default as Favorite} from './Favorite';
 export {default as PersonDetailsModal} from './PersonDetailsModal';

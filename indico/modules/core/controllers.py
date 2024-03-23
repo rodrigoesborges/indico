@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -34,6 +34,7 @@ from indico.modules.core.views import WPContact, WPSettings
 from indico.modules.legal import legal_settings
 from indico.modules.users.controllers import RHUserBase
 from indico.modules.users.schemas import AffiliationSchema
+from indico.util.date_time import server_to_utc
 from indico.util.i18n import _, get_all_locales
 from indico.util.marshmallow import PrincipalDict, validate_with_message
 from indico.util.string import render_markdown, sanitize_html
@@ -132,11 +133,11 @@ class RHChangeTimezone(RH):
             session.timezone = session.user.settings.get('timezone', config.DEFAULT_TIMEZONE)
         elif mode == 'custom' and tz in common_timezones_set:
             session.timezone = tz
+            if update_user and session.user:
+                session.user.settings.set('timezone', tz)
 
         if update_user and session.user:
             session.user.settings.set('force_timezone', mode != 'local')
-            if tz and tz in common_timezones_set:
-                session.user.settings.set('timezone', tz)
 
         return '', 204
 
@@ -362,3 +363,33 @@ class RHRenderMarkdown(RH):
     def _process_POST(self, source):
         html = render_markdown(source, extensions=('nl2br',))
         return jsonify(html=html)
+
+
+class RHSessionExpiry(RH):
+    """Return the session expiration time without refreshing the session.
+
+    The logic that prevents this endpoint from refreshing the session is
+    implemented in ``indico.web.flask.session``.
+    """
+
+    def _process(self):
+        try:
+            expiry = str(server_to_utc(session['_expires']))
+        except KeyError:
+            # an empty session (nothing stored on the server at all) also has no expiry
+            expiry = None
+        return jsonify(session_expiry=expiry)
+
+
+class RHSessionRefresh(RH):
+    """Refresh the current session.
+
+    Refreshing the session is the standard behavior of almost any endpoint,
+    so no custom logic is needed here
+
+    The logic that forces this endpoint to always refresh the session is
+    implemented in ``indico.web.flask.session``.
+    """
+
+    def _process(self):
+        return '', 204

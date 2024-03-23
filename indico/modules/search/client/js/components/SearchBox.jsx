@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -14,7 +14,7 @@ import {Translate} from 'indico/react/i18n';
 import './SearchBox.module.scss';
 
 const renderResult = ({label}, keyword) => (
-  <div styleName="option">
+  <div styleName="search-type-option">
     <span>
       <Icon name="search" />
       {keyword}
@@ -51,9 +51,10 @@ export default function SearchBox({onSearch, category, isAdmin}) {
       onClick: () => {},
       // eslint-disable-next-line react/display-name
       renderer: () => (
-        <div styleName="option">
+        <div styleName="search-type-option">
           <Label content={Translate.string('ADMIN')} size="small" color="red" />
           <Checkbox
+            id="checkbox-admin-search"
             styleName="checkbox-admin-search"
             label={Translate.string('Skip access checks')}
             checked={adminOverrideEnabled}
@@ -87,19 +88,22 @@ export default function SearchBox({onSearch, category, isAdmin}) {
 
   return (
     <Form onSubmit={handleSubmit}>
-      <Search
-        input={{fluid: true}}
-        placeholder={Translate.string('Enter your search term')}
-        results={options}
-        value={keyword}
-        showNoResults={false}
-        open={!!keyword}
-        onResultSelect={handleResultSelect}
-        onSearchChange={handleSearchChange}
-        fluid
-        // only select the first result if there is more than 1 (means we are in a category)
-        selectFirstResult={options.length > 1}
-      />
+      <label styleName="search-field">
+        <Translate as="span">Search Indico</Translate>
+        <Search
+          input={{fluid: true}}
+          placeholder={Translate.string('Enter your search term')}
+          results={options}
+          value={keyword}
+          showNoResults={false}
+          open={!!keyword}
+          onResultSelect={handleResultSelect}
+          onSearchChange={handleSearchChange}
+          fluid
+          // only select the first result if there is more than 1 (means we are in a category)
+          selectFirstResult={options.length > 1}
+        />
+      </label>
     </Form>
   );
 }

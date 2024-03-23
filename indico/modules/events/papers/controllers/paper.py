@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -104,15 +104,13 @@ class RHPapersActionBase(RHPapersListBase):
 
 
 class RHDownloadPapers(ZipGeneratorMixin, RHPapersActionBase):
-    """
-    Generate a ZIP file with paper files for a given list of contributions.
-    """
+    """Generate a ZIP file with paper files for a given list of contributions."""
 
     ALLOW_LOCKED = True
 
     def _prepare_folder_structure(self, item):
-        paper_title = secure_filename('{}_{}'.format(item.paper.contribution.friendly_id,
-                                                     item.paper.contribution.title), 'paper')
+        contrib = item.paper.contribution
+        paper_title = secure_filename(f'{contrib.friendly_id}_{contrib.title}', 'paper')
         file_name = secure_filename(f'{item.id}_{item.filename}', 'paper')
         return os.path.join(*self._adjust_path_length([paper_title, file_name]))
 

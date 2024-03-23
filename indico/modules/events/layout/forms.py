@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -20,7 +20,7 @@ from indico.web.forms.base import IndicoForm
 from indico.web.forms.fields import EditableFileField, FileField, IndicoEnumSelectField, IndicoProtectionField
 from indico.web.forms.fields.principals import PrincipalListField
 from indico.web.forms.validators import HiddenUnless, UsedIf
-from indico.web.forms.widgets import CKEditorWidget, ColorPickerWidget, SwitchWidget
+from indico.web.forms.widgets import ColorPickerWidget, SwitchWidget, TinyMCEWidget
 
 
 THEMES = [('', _('No theme selected')),
@@ -105,7 +105,7 @@ class ConferenceLayoutForm(LoggedLayoutForm):
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop('event')
         super().__init__(*args, **kwargs)
-        self.timetable_theme.choices = [('', _('Default'))] + _get_timetable_theme_choices(self.event)
+        self.timetable_theme.choices = [('', _('Default')), *_get_timetable_theme_choices(self.event)]
         self.theme.choices = _get_conference_theme_choices()
 
     def validate_use_custom_css(self, field):
@@ -197,10 +197,10 @@ class MenuLinkForm(MenuUserEntryFormBase):
 
 
 class MenuPageForm(MenuUserEntryFormBase):
-    html = TextAreaField(_('Content'), [DataRequired()], widget=CKEditorWidget(images=True, html_embed=True))
+    html = TextAreaField(_('Content'), [DataRequired()], widget=TinyMCEWidget(images=True))
 
-    def __init__(self, *args, ckeditor_upload_url, **kwargs):
-        self.ckeditor_upload_url = ckeditor_upload_url
+    def __init__(self, *args, editor_upload_url, **kwargs):
+        self.editor_upload_url = editor_upload_url
         super().__init__(*args, **kwargs)
 
 

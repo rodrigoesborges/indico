@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -9,7 +9,7 @@ from operator import itemgetter
 
 from babel.dates import get_timezone
 from flask import session
-from marshmallow import ValidationError, fields, post_dump, validate, validates, validates_schema
+from marshmallow import ValidationError, fields, post_dump, post_load, validate, validates, validates_schema
 from marshmallow.fields import Boolean, Date, DateTime, Function, Method, Nested, Number, Pluck, String
 from marshmallow_enum import EnumField
 from sqlalchemy import func
@@ -20,6 +20,7 @@ from indico.core.db.sqlalchemy.protection import ProtectionMode
 from indico.core.marshmallow import mm
 from indico.modules.categories.models.categories import Category
 from indico.modules.events.sessions.models.blocks import SessionBlock
+from indico.modules.rb import BookingReasonRequiredOptions, rb_settings
 from indico.modules.rb.models.blocked_rooms import BlockedRoom, BlockedRoomState
 from indico.modules.rb.models.blockings import Blocking
 from indico.modules.rb.models.equipment import EquipmentType
@@ -27,14 +28,15 @@ from indico.modules.rb.models.locations import Location
 from indico.modules.rb.models.map_areas import MapArea
 from indico.modules.rb.models.principals import RoomPrincipal
 from indico.modules.rb.models.reservation_edit_logs import ReservationEditLog
-from indico.modules.rb.models.reservation_occurrences import ReservationOccurrence
-from indico.modules.rb.models.reservations import RepeatFrequency, Reservation, ReservationLink, ReservationState
+from indico.modules.rb.models.reservation_occurrences import (ReservationOccurrence, ReservationOccurrenceLink,
+                                                              ReservationOccurrenceState)
+from indico.modules.rb.models.reservations import RepeatFrequency, Reservation, ReservationState
 from indico.modules.rb.models.room_attributes import RoomAttribute, RoomAttributeAssociation
 from indico.modules.rb.models.room_bookable_hours import BookableHours
 from indico.modules.rb.models.room_features import RoomFeature
 from indico.modules.rb.models.room_nonbookable_periods import NonBookablePeriod
 from indico.modules.rb.models.rooms import Room
-from indico.modules.rb.util import rb_is_admin
+from indico.modules.rb.util import WEEKDAYS, rb_is_admin
 from indico.modules.users.schemas import UserSchema
 from indico.util.i18n import _
 from indico.util.marshmallow import (ModelList, NaiveDateTime, Principal, PrincipalList, PrincipalPermissionList,
@@ -80,12 +82,10 @@ class RoomUpdateSchema(RoomSchema):
     protection_mode = EnumField(ProtectionMode)
 
     class Meta(RoomSchema.Meta):
-        fields = RoomSchema.Meta.fields + ('notification_before_days', 'notification_before_days_weekly', 'owner',
-                                           'notification_before_days_monthly', 'notifications_enabled',
-                                           'end_notification_daily', 'end_notification_weekly',
-                                           'end_notification_monthly', 'end_notifications_enabled',
-                                           'verbose_name', 'site', 'notification_emails', 'booking_limit_days',
-                                           'acl_entries', 'protection_mode')
+        fields = (*RoomSchema.Meta.fields, 'notification_before_days', 'notification_before_days_weekly', 'owner',
+                  'notification_before_days_monthly', 'notifications_enabled', 'end_notification_daily',
+                  'end_notification_weekly', 'end_notification_monthly', 'end_notifications_enabled', 'verbose_name',
+                  'site', 'notification_emails', 'booking_limit_days', 'acl_entries', 'protection_mode')
 
 
 class RoomUpdateArgsSchema(mm.Schema):
@@ -140,12 +140,20 @@ class ReservationSchema(mm.SQLAlchemyAutoSchema):
     class Meta:
         model = Reservation
         fields = ('id', 'booking_reason', 'booked_for_name', 'room_id', 'is_accepted', 'start_dt', 'end_dt',
-                  'is_repeating', 'repeat_frequency', 'repeat_interval')
+                  'is_repeating', 'repeat_frequency', 'repeat_interval', 'recurrence_weekdays')
+
+    @post_dump(pass_original=True)
+    def _add_missing_weekdays(self, data, booking, **kwargs):
+        if booking.repeat_frequency == RepeatFrequency.WEEK and booking.recurrence_weekdays is None:
+            # Weekly booking created before the recurrence weekdays have been implemented
+            data['recurrence_weekdays'] = [WEEKDAYS[booking.start_dt.weekday()]]
+        return data
 
 
 class ReservationLinkedObjectDataSchema(mm.Schema):
     id = Number()
     title = Method('_get_title')
+    url = Function(lambda obj: obj.url)
     event_title = Function(lambda obj: obj.event.title)
     event_url = Function(lambda obj: obj.event.url)
     own_room_id = Number()
@@ -165,9 +173,27 @@ class ReservationUserEventSchema(mm.Schema):
     end_dt = DateTime()
 
 
+class ReservationOccurrenceLinkSchema(mm.SQLAlchemyAutoSchema):
+    id = Number()
+    type = EnumField(LinkType, attribute='link_type')
+    object = Nested(ReservationLinkedObjectDataSchema, only=('url', 'title', 'event_title', 'event_url'))
+    start_dt = NaiveDateTime(attribute='reservation_occurrence.start_dt')
+    state = EnumField(ReservationOccurrenceState, attribute='reservation_occurrence.state')
+
+    @post_dump(pass_original=True)
+    def _hide_restricted_object(self, data, link, **kwargs):
+        if not link.object.can_access(session.user):
+            data['object'] = None
+        return data
+
+    class Meta:
+        model = ReservationOccurrenceLink
+        fields = ('id', 'type', 'object', 'start_dt', 'state')
+
+
 class ReservationOccurrenceSchema(mm.SQLAlchemyAutoSchema):
     reservation = Nested(ReservationSchema)
-    state = EnumField(ReservationState)
+    state = EnumField(ReservationOccurrenceState)
     start_dt = NaiveDateTime()
     end_dt = NaiveDateTime()
 
@@ -180,7 +206,7 @@ class ReservationOccurrenceSchemaWithPermissions(ReservationOccurrenceSchema):
     permissions = Method('_get_permissions')
 
     class Meta:
-        fields = ReservationOccurrenceSchema.Meta.fields + ('permissions',)
+        fields = (*ReservationOccurrenceSchema.Meta.fields, 'permissions')
 
     def _get_permissions(self, occurrence):
         methods = ('can_cancel', 'can_reject')
@@ -195,11 +221,11 @@ class ReservationConcurrentOccurrenceSchema(ReservationOccurrenceSchema):
     reservations = Nested(ReservationSchema, many=True)
 
     class Meta:
-        fields = ReservationOccurrenceSchema.Meta.fields + ('reservations',)
+        fields = (*ReservationOccurrenceSchema.Meta.fields, 'reservations')
         exclude = ('reservation',)
 
 
-class ReservationEditLogSchema(UserSchema):
+class ReservationEditLogSchema(mm.SQLAlchemyAutoSchema):
     class Meta:
         model = ReservationEditLog
         fields = ('id', 'timestamp', 'info', 'user_name')
@@ -209,15 +235,6 @@ class ReservationEditLogSchema(UserSchema):
         if many:
             data = sorted(data, key=itemgetter('timestamp'), reverse=True)
         return data
-
-
-class ReservationLinkSchema(mm.SQLAlchemyAutoSchema):
-    type = EnumField(LinkType, attribute='link_type')
-    id = Function(lambda link: link.object.id)
-
-    class Meta:
-        model = ReservationLink
-        fields = ('type', 'id')
 
 
 class ReservationDetailsSchema(mm.SQLAlchemyAutoSchema):
@@ -231,8 +248,7 @@ class ReservationDetailsSchema(mm.SQLAlchemyAutoSchema):
     can_reject = Function(lambda booking: booking.can_reject(session.user))
     permissions = Method('_get_permissions')
     state = EnumField(ReservationState)
-    is_linked_to_object = Function(lambda booking: booking.link is not None)
-    link = Nested(ReservationLinkSchema)
+    is_linked_to_objects = Function(lambda booking: bool(booking.links))
     start_dt = NaiveDateTime()
     end_dt = NaiveDateTime()
 
@@ -241,7 +257,7 @@ class ReservationDetailsSchema(mm.SQLAlchemyAutoSchema):
         fields = ('id', 'start_dt', 'end_dt', 'repetition', 'booking_reason', 'created_dt', 'booked_for_user',
                   'room_id', 'created_by_user', 'edit_logs', 'permissions',
                   'is_cancelled', 'is_rejected', 'is_accepted', 'is_pending', 'rejection_reason',
-                  'is_linked_to_object', 'link', 'state', 'external_details_url', 'internal_note')
+                  'is_linked_to_objects', 'state', 'external_details_url', 'internal_note', 'recurrence_weekdays')
 
     def _get_permissions(self, booking):
         methods = ('can_accept', 'can_cancel', 'can_delete', 'can_edit', 'can_reject')
@@ -255,6 +271,17 @@ class ReservationDetailsSchema(mm.SQLAlchemyAutoSchema):
     def _hide_sensitive_data(self, data, booking, **kwargs):
         if not booking.room.can_manage(session.user):
             del data['internal_note']
+        return data
+
+    @post_dump(pass_original=True)
+    def _add_missing_weekdays(self, data, booking, **kwargs):
+        if booking.repeat_frequency == RepeatFrequency.WEEK and booking.recurrence_weekdays is None:
+            # Weekly booking created before the recurrence weekdays have been implemented. In that case
+            # we need to get the weekdays from the start date of the booking so the JS code which expects
+            # them to be present (e.g. when editing a booking) works properly
+            weekdays = [WEEKDAYS[booking.start_dt.weekday()]]
+            data['recurrence_weekdays'] = weekdays
+            data['repetition'] = (*data['repetition'][:2], weekdays)
         return data
 
 
@@ -343,7 +370,7 @@ class RBUserSchema(UserSchema):
     is_rb_admin = mm.Function(lambda user: rb_is_admin(user))
 
     class Meta:
-        fields = UserSchema.Meta.fields + ('has_owned_rooms', 'is_admin', 'is_rb_admin', 'identifier', 'full_name')
+        fields = (*UserSchema.Meta.fields, 'has_owned_rooms', 'is_admin', 'is_rb_admin', 'identifier', 'full_name')
 
     def has_managed_rooms(self, user):
         from indico.modules.rb.operations.rooms import has_managed_rooms
@@ -351,13 +378,17 @@ class RBUserSchema(UserSchema):
 
 
 class CreateBookingSchema(mm.Schema):
+    class Meta:
+        rh_context = ('booking',)
+
     start_dt = fields.DateTime(required=True)
     end_dt = fields.DateTime(required=True)
     repeat_frequency = EnumField(RepeatFrequency, required=True)
     repeat_interval = fields.Int(load_default=0, validate=lambda x: x >= 0)
+    recurrence_weekdays = fields.List(fields.Str(validate=validate.OneOf(WEEKDAYS)))
     room_id = fields.Int(required=True)
     booked_for_user = Principal(data_key='user', allow_external_users=True)
-    booking_reason = fields.String(data_key='reason', validate=validate.Length(min=3), required=True)
+    booking_reason = fields.String(data_key='reason', load_default='')
     internal_note = fields.String()
     is_prebooking = fields.Bool(load_default=False)
     link_type = EnumField(LinkType)
@@ -369,6 +400,32 @@ class CreateBookingSchema(mm.Schema):
     def validate_dts(self, data, **kwargs):
         if data['start_dt'] >= data['end_dt']:
             raise ValidationError(_('Booking cannot end before it starts'))
+
+    @validates('recurrence_weekdays')
+    def _check_weekdays_unique(self, weekdays, **kwargs):
+        if weekdays and len(weekdays) != len(set(weekdays)):
+            raise ValidationError('Duplicate weekdays')
+
+    @validates_schema(skip_on_field_errors=True)
+    def _check_booking_reason(self, data, **kwargs):
+        booking = self.context.get('booking')
+        has_link = bool(booking.links) if booking else (data.get('link_id') is not None)
+        booking_reason = data.get('booking_reason')
+        required = rb_settings.get('booking_reason_required')
+        validate = False
+        if required == BookingReasonRequiredOptions.always:
+            validate = True
+        elif required == BookingReasonRequiredOptions.not_for_events:
+            validate = not has_link
+        if validate and not booking_reason:
+            raise ValidationError('Booking reason not specified', 'reason')
+
+    @post_load
+    def _weekdays_only_weekly(self, data, **kwargs):
+        # Make sure we do not set recurrence weekdays if the booking does not have weekly repetition
+        if data['repeat_frequency'] != RepeatFrequency.WEEK:
+            data['recurrence_weekdays'] = None
+        return data
 
 
 class RoomFeatureSchema(mm.SQLAlchemyAutoSchema):
@@ -485,8 +542,10 @@ class SettingsSchema(mm.Schema):
     admin_principals = PrincipalList(allow_groups=True)
     authorized_principals = PrincipalList(allow_groups=True)
     managers_edit_rooms = fields.Bool()
+    hide_module_if_unauthorized = fields.Bool()
     tileserver_url = fields.String(validate=validate.URL(schemes={'http', 'https'}), allow_none=True)
     booking_limit = fields.Int(validate=not_empty)
+    booking_reason_required = EnumField(BookingReasonRequiredOptions, required=True)
     notifications_enabled = fields.Bool()
     notification_before_days = fields.Int(validate=validate.Range(min=1, max=30))
     notification_before_days_weekly = fields.Int(validate=validate.Range(min=1, max=30))

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -15,6 +15,7 @@ from flask import Blueprint, current_app, g, redirect, request
 from flask import send_file as _send_file
 from flask import url_for as _url_for
 from flask.helpers import get_root_path
+from flask_cors import cross_origin
 from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.routing import BaseConverter, BuildError, RequestRedirect, UnicodeConverter
 
@@ -36,11 +37,11 @@ def discover_blueprints():
     """
     package_root = get_root_path('indico')
     modules = set()
-    for root, dirs, files in os.walk(package_root):
+    for root, _dirs, files in os.walk(package_root):
         for name in files:
             if not name.endswith('.py') or name.endswith('_test.py'):
                 continue
-            segments = ['indico'] + os.path.relpath(root, package_root).replace(os.sep, '.').split('.') + [name[:-3]]
+            segments = ['indico', *os.path.relpath(root, package_root).replace(os.sep, '.').split('.'), name[:-3]]
             if segments[-1] == 'blueprint':
                 modules.add('.'.join(segments))
             elif 'blueprints' in segments[:-1]:
@@ -83,6 +84,11 @@ def make_view_func(obj):
 
         wrapper.__name__ = obj.__name__
         wrapper.__doc__ = obj.__doc__
+
+        if (cors_config := getattr(obj, '_CORS', None)) is not None:
+            # apply CORS options from `@cors` decorator
+            wrapper = cross_origin(**cors_config)(wrapper)
+
         return wrapper
     elif callable(obj):
         # Normal function
@@ -125,7 +131,7 @@ def make_compat_redirect_func(blueprint, endpoint, view_func=None, view_args_con
 
 
 def url_for(endpoint, *targets, **values):
-    """Wrapper for Flask's url_for() function.
+    """Wrapper for Flask's ``url_for`` function.
 
     The `target` argument allows you to pass some object having a `locator` property returning a dict.
 
@@ -136,7 +142,6 @@ def url_for(endpoint, *targets, **values):
     _scheme: a string specifying the desired URL scheme (only with _external) - use _secure if possible!
     _anchor: if provided this is added as #anchor to the URL.
     """
-
     if targets:
         locator = {}
         for target in targets:
@@ -182,7 +187,6 @@ def url_rule_to_js(endpoint):
     ``params`` is is an object containing the arguments and ``fragment``
     a string containing the ``#anchor`` if needed.
     """
-
     if endpoint[0] == '.':
         endpoint = request.blueprint + endpoint
 
@@ -252,7 +256,6 @@ def send_file(name, path_or_fd, mimetype, last_modified=None, no_cache=True, inl
     `safe` adds some basic security features such a adding a content-security-policy and forcing inline=False for
     text/html mimetypes
     """
-
     name = re.sub(r'\s+', ' ', name).strip()  # get rid of crap like linebreaks
     assert '/' in mimetype
     if inline is None:

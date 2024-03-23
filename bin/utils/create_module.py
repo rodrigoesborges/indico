@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -143,8 +143,8 @@ def main(indico_dir, name, module_dir, event, models, blueprint, templates, cont
             write(f)
             if templates:
                 virtual_template_folder = f'events/{name}' if event else name
-                write(f, "_bp = IndicoBlueprint('{}', __name__, template_folder='templates',\n\
-                      virtual_template_folder='{}')".format(blueprint_name, virtual_template_folder))
+                write(f, f"_bp = IndicoBlueprint('{blueprint_name}', __name__, template_folder='templates',\n\
+                      virtual_template_folder='{virtual_template_folder}')")
             else:
                 write(f, f"_bp = IndicoBlueprint('{blueprint_name}', __name__)")
             write(f)

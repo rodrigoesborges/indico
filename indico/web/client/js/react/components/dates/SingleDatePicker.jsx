@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -14,7 +14,7 @@ import {SingleDatePicker as ReactDatesSinglePicker} from 'react-dates';
 import {FinalField} from 'indico/react/forms';
 import {serializeDate, toMoment} from 'indico/utils/date';
 
-import {responsiveReactDates} from './util';
+import {renderMonthElement, responsiveReactDates} from './util';
 
 import 'react-dates/lib/css/_datepicker.css';
 import '../style/dates.scss';
@@ -28,15 +28,21 @@ const PROP_BLACKLIST = new Set([
   'label',
   'disabledDate',
   'render',
+  'yearsBefore',
+  'yearsAfter',
 ]);
 
 export default class SingleDatePicker extends React.Component {
   static propTypes = {
     disabledDate: PropTypes.func,
+    yearsBefore: PropTypes.number,
+    yearsAfter: PropTypes.number,
   };
 
   static defaultProps = {
     disabledDate: null,
+    yearsBefore: 5,
+    yearsAfter: 5,
   };
 
   state = {
@@ -49,7 +55,7 @@ export default class SingleDatePicker extends React.Component {
 
   render() {
     const {focused} = this.state;
-    const {disabledDate} = this.props;
+    const {disabledDate, yearsBefore, yearsAfter} = this.props;
     const filteredProps = Object.entries(this.props)
       .filter(([name]) => {
         return !PROP_BLACKLIST.has(name);
@@ -70,6 +76,8 @@ export default class SingleDatePicker extends React.Component {
       hideKeyboardShortcutsPanel: true,
       showDefaultInputIcon: true,
       focused,
+      ariaLabel: '', // XXX: Suppress aria-label as it interferes with input's label
+      renderMonthElement: params => renderMonthElement(yearsBefore, yearsAfter, params),
       ...filteredProps,
     });
   }

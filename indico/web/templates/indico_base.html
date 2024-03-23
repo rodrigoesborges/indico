@@ -1,4 +1,6 @@
 {#- Base template for indico pages (standard "indico look") -#}
+{%- from 'core/session_expiry.html' import setup_session_expiry -%}
+
 <!DOCTYPE html>
 
 <html lang="{{ current_locale.language }}"
@@ -17,9 +19,6 @@
 
     {% include 'meta.html' %}
 
-    {% if social.facebook_app_id -%}
-        <meta property="fb:app_id" content="{{ social.facebook_app_id }}">
-    {% endif %}
     {% block extra_meta_tags %}
     {% endblock %}
 
@@ -58,7 +57,11 @@
     {{ template_hook('html-head') }}
 </head>
 <body data-user-id="{{ session.user.id if session.user else 'null' }}"
-      data-debug="{{ config.DEBUG|tojson|forceescape }}">
+      data-debug="{{ config.DEBUG|tojson|forceescape }}"
+      {% if tinymce_content_css_urls is defined %}
+          data-tinymce-content-css="{{ tinymce_content_css_urls|tojson|forceescape }}"
+      {% endif %}>
+    <ind-bypass-block-links></ind-bypass-block-links>
     {% block html_body %}
         {#-
         XXX: Using a block and inheritance would be nicer but for now this
@@ -66,6 +69,7 @@
         #}
         {{ body|safe }}
     {% endblock %}
+    {{ setup_session_expiry() }}
 </body>
 </html>
 {%- set req_stats = get_request_stats() %}
@@ -80,4 +84,5 @@ Endpoint:        {{ request.endpoint }}
 {%- if g.rh %}
 RH:              {{ g.rh.__class__.__module__ }}.{{ g.rh.__class__.__name__ }}
 {%- endif %}
+WP:              {{ wp_class.__module__ }}.{{ wp_class.__name__ }}
 -->

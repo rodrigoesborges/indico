@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -35,6 +35,7 @@ import RoomStats from './RoomStats';
 import * as roomsSelectors from './selectors';
 
 import './RoomDetailsModal.module.scss';
+import '../../components/WeekdayInformation.module.scss';
 
 class RoomDetailsModal extends React.Component {
   static propTypes = {
@@ -176,7 +177,11 @@ function RoomDetails({
       blockings: blockings || [],
       overridableBlockings: overridableBlockings || [],
     },
-    label: moment(day).format('L'),
+    label: (
+      <>
+        <span styleName="weekday">{moment(day).format('ddd')}</span> {moment(day).format('L')}
+      </>
+    ),
     key: day,
     room,
   });

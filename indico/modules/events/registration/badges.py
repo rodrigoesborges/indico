@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -15,6 +15,7 @@ from werkzeug.exceptions import BadRequest
 
 from indico.core import signals
 from indico.modules.designer.pdf import DesignerPDFBase
+from indico.modules.designer.util import is_regform_field_placeholder
 from indico.modules.events.registration.settings import DEFAULT_BADGE_SETTINGS
 from indico.util.i18n import _
 from indico.util.placeholders import get_placeholders
@@ -32,23 +33,8 @@ def _get_font_size(text):
 class RegistrantsListToBadgesPDF(DesignerPDFBase):
     def __init__(self, template, config, event, registrations, include_accompanying_persons):
         super().__init__(template, config)
-        self.persons = []
-        for registration in registrations:
-            self.persons.append({
-                'id': registration.id,
-                'first_name': registration.first_name,
-                'last_name': registration.last_name,
-                'registration': registration,
-                'is_accompanying': False,
-            })
-            if include_accompanying_persons:
-                self.persons.extend({
-                    'id': person['id'],
-                    'first_name': person['firstName'],
-                    'last_name': person['lastName'],
-                    'registration': registration,
-                    'is_accompanying': True,
-                } for person in registration.accompanying_persons)
+        from indico.modules.events.registration.util import get_persons
+        self.persons = get_persons(registrations, include_accompanying_persons)
 
     def _build_config(self, config_data):
         return ConfigData(**config_data)
@@ -88,6 +74,8 @@ class RegistrantsListToBadgesPDF(DesignerPDFBase):
         config = self.config
         badge_rect = (pos_x, self.height - pos_y - tpl_data.height_cm * cm,
                       tpl_data.width_cm * cm, tpl_data.height_cm * cm)
+        registration = person['registration']
+        regform = registration.registration_form
 
         if config.dashed_border:
             canvas.saveState()
@@ -107,7 +95,14 @@ class RegistrantsListToBadgesPDF(DesignerPDFBase):
                                                          item['type'] not in image_placeholders))
 
         for item in items:
-            placeholder = placeholders.get(item['type'])
+            if is_regform_field_placeholder(item):
+                from indico.modules.designer.placeholders import RegistrationFormFieldPlaceholder
+                placeholder = RegistrationFormFieldPlaceholder.from_designer_item(regform, item)
+                if placeholder is None:
+                    # the regform field referenced by the designer item does not exist
+                    continue
+            else:
+                placeholder = placeholders.get(item['type'])
 
             if placeholder:
                 if placeholder.group == 'registrant':
@@ -121,6 +116,8 @@ class RegistrantsListToBadgesPDF(DesignerPDFBase):
                     text = placeholder.render(person['registration'].event)
                 elif placeholder.group == 'fixed':
                     text = placeholder.render(item)
+                elif placeholder.group == 'regform_fields':
+                    text = placeholder.render(person['registration'])
                 else:
                     raise ValueError(f'Unknown placeholder group: `{placeholder.group}`')
             else:
@@ -129,12 +126,14 @@ class RegistrantsListToBadgesPDF(DesignerPDFBase):
             item_data = {'item': item, 'text': text, 'pos_x': pos_x, 'pos_y': pos_y}
             for update in values_from_signal(
                 signals.event.designer.draw_item_on_badge.send(person['registration'], items=items, height=self.height,
-                                                               width=self.width, data=item_data, person=person),
+                                                               width=self.width, data=item_data, person=person,
+                                                               template_data=tpl_data),
                 as_list=True
             ):
                 item_data.update(update)
-            self._draw_item(canvas, item_data['item'], tpl_data, item_data['text'], item_data['pos_x'],
-                            item_data['pos_y'])
+            if item_data['text'] is not None:
+                self._draw_item(canvas, item_data['item'], tpl_data, item_data['text'], item_data['pos_x'],
+                                item_data['pos_y'])
 
 
 class RegistrantsListToBadgesPDFFoldable(RegistrantsListToBadgesPDF):

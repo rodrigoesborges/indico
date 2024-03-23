@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -84,7 +84,7 @@ class ReviewCommentMixin(RenderModeMixin):
             foreign_keys=cls.user_id,
             backref=db.backref(
                 cls.user_backref_name,
-                primaryjoin='({0}.user_id == User.id) & ~{0}.is_deleted'.format(cls.__name__),
+                primaryjoin=f'({cls.__name__}.user_id == User.id) & ~{cls.__name__}.is_deleted',
                 lazy='dynamic'
             )
         )
@@ -97,7 +97,7 @@ class ReviewCommentMixin(RenderModeMixin):
             foreign_keys=cls.modified_by_id,
             backref=db.backref(
                 cls.user_modified_backref_name,
-                primaryjoin='({0}.modified_by_id == User.id) & ~{0}.is_deleted'.format(cls.__name__),
+                primaryjoin=f'({cls.__name__}.modified_by_id == User.id) & ~{cls.__name__}.is_deleted',
                 lazy='dynamic'
             )
         )

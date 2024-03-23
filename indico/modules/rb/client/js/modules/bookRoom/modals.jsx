@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -22,8 +22,15 @@ import UnavailableRoomsModal from './UnavailableRoomsModal';
 const BookingDataProvider = connect(state => ({
   bookRoomFilters: bookRoomSelectors.getFilters(state),
 }))(
-  ({bookRoomFilters: {dates, timeSlot, recurrence}, bookingData: {isPrebooking}, ...restProps}) => (
-    <BookRoomModal {...restProps} bookingData={{dates, timeSlot, recurrence, isPrebooking}} />
+  ({
+    bookRoomFilters: {dates, timeSlot, recurrence, weekdays},
+    bookingData: {isPrebooking},
+    ...restProps
+  }) => (
+    <BookRoomModal
+      {...restProps}
+      bookingData={{dates, timeSlot, recurrence, weekdays, isPrebooking}}
+    />
   )
 );
 

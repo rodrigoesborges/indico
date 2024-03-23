@@ -1,16 +1,19 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
+import json
 import operator
 import os
 import re
 from email import message_from_string
 from email.policy import SMTPUTF8
 from itertools import product
+
+import yaml
 
 
 def bool_matrix(template, mask=None, expect=None):
@@ -96,15 +99,15 @@ def bool_matrix(template, mask=None, expect=None):
     if expect is None:
         pass
     elif expect == 'any_dynamic':
-        iterable = (x + (any(y for i, y in enumerate(x) if template[i] is None),) for x in iterable)
+        iterable = ((*x, any(y for i, y in enumerate(x) if template[i] is None)) for x in iterable)
     elif expect == 'all_dynamic':
-        iterable = (x + (all(y for i, y in enumerate(x) if template[i] is None),) for x in iterable)
+        iterable = ((*x, all(y for i, y in enumerate(x) if template[i] is None)) for x in iterable)
     elif callable(expect):
-        iterable = (x + (expect(x),) for x in iterable)
+        iterable = ((*x, expect(x)) for x in iterable)
     elif isinstance(expect, (tuple, list)):
-        iterable = (x + (x == expect,) for x in iterable)
+        iterable = ((*x, x == expect) for x in iterable)
     else:
-        iterable = (x + (expect,) for x in iterable)
+        iterable = ((*x, expect) for x in iterable)
     matrix = tuple(iterable)
     if not matrix:
         raise ValueError('empty matrix')
@@ -201,3 +204,40 @@ def assert_email_snapshot(snapshot, template, snapshot_filename):
     snapshot.assert_match(body, snapshot_filename)
     # we add a trailing linebreak so make manually editing the snapshot easier
     snapshot.assert_match(subject + '\n', snapshot_filename_subject)
+
+
+def assert_json_snapshot(snapshot, obj, snapshot_filename):
+    """Assert that a json object matches a snapshot.
+
+    :param snapshot: The pytest snapshot fixture
+    :param obj: The json object to compare
+    :param snapshot_filename: The filename for the snapshot
+    """
+    __tracebackhide__ = True
+    snapshot.assert_match(json.dumps(obj, indent=2, sort_keys=True), snapshot_filename)
+
+
+def assert_yaml_snapshot(snapshot, obj, snapshot_filename, *, strip_dynamic_data=False):
+    """Assert that a yaml object matches a snapshot.
+
+    :param snapshot: The pytest snapshot fixture
+    :param obj: The yaml object to compare
+    :param snapshot_filename: The filename for the snapshot
+    :param strip_dynamic_data: Whether to replace likely-dynamic data like IDs and
+                               dates with placeholders
+    """
+    dumped = yaml.dump(obj)
+    if strip_dynamic_data:
+        dumped = remove_dynamic_data(dumped)
+    __tracebackhide__ = True
+    snapshot.assert_match(dumped, snapshot_filename)
+
+
+def remove_dynamic_data(yaml_string):
+    """Remove data that appears dynamic (IDs, dates) from a YAML string."""
+    yaml_string = re.sub(r'(?<=_date: )(?!null$).+$', '<timestamp>', yaml_string, flags=re.MULTILINE)
+    yaml_string = re.sub(r'(?<=_dt: )(?!null$).+$', '<timestamp>', yaml_string, flags=re.MULTILINE)
+    yaml_string = re.sub(r'(?<=: )[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', '<uuid>',
+                         yaml_string, flags=re.MULTILINE)
+    yaml_string = re.sub(r'(?<=_id: )(?!null$).+$', '<id>', yaml_string, flags=re.MULTILINE)
+    return re.sub(r'(?<=\bid: )(?!null$).+$', '<id>', yaml_string, flags=re.MULTILINE)

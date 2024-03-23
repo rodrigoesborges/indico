@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -141,7 +141,6 @@ class RegistrationFormFieldBase:
         :param billable_items_locked: Whether modifications to any
                                       billable item should be ignored.
         """
-
         if old_data is not None and not self.has_data_changed(value, old_data):
             return {}
         else:

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -10,7 +10,8 @@ from indico.core.db import db
 from indico.core.db.sqlalchemy.principals import clone_principals
 from indico.modules.attachments.settings import attachments_settings
 from indico.modules.events.cloning import EventCloner, get_attrs_to_clone
-from indico.modules.events.contributions import contribution_settings, subcontribution_settings
+from indico.modules.events.contributions import contribution_settings
+from indico.modules.events.management.settings import privacy_settings
 from indico.modules.events.models.events import EventType
 from indico.modules.events.models.persons import EventPerson, EventPersonLink
 from indico.modules.events.models.principals import EventPrincipal
@@ -125,7 +126,7 @@ class EventProtectionCloner(EventCloner):
     def get_conflicts(self, target_event):
         conflicts = []
 
-        if target_event.access_key != '':
+        if target_event.access_key:
             conflicts.append(_('The target event already has an access key'))
 
         entries = list(target_event.acl_entries)
@@ -141,7 +142,6 @@ class EventProtectionCloner(EventCloner):
             self._clone_protection(new_event)
             self._clone_session_coordinator_privs(new_event)
             self._clone_contrib_settings(new_event)
-            self._clone_subcontrib_settings(new_event)
             self._clone_attachment_settings(new_event)
             self._clone_acl(new_event, event_exists)
             self._clone_visibility(new_event)
@@ -155,6 +155,7 @@ class EventProtectionCloner(EventCloner):
         new_event.access_key = self.old_event.access_key
         new_event.own_no_access_contact = self.old_event.own_no_access_contact
         new_event.public_regform_access = self.old_event.public_regform_access
+        new_event.subcontrib_speakers_can_submit = self.old_event.subcontrib_speakers_can_submit
 
     def _clone_visibility(self, new_event):
         new_event.visibility = self.old_event.visibility if new_event.category == self.old_event.category else None
@@ -171,12 +172,6 @@ class EventProtectionCloner(EventCloner):
         contribution_settings.set_multi(new_event, {
             'submitters_can_edit': contribution_settings_data['submitters_can_edit'],
             'submitters_can_edit_custom': contribution_settings_data['submitters_can_edit_custom']
-        })
-
-    def _clone_subcontrib_settings(self, new_event):
-        subcontribution_settings_data = subcontribution_settings.get_all(self.old_event)
-        subcontribution_settings.set_multi(new_event, {
-            'speakers_can_submit': subcontribution_settings_data['speakers_can_submit'],
         })
 
     def _clone_attachment_settings(self, new_event):
@@ -219,3 +214,29 @@ class EventSeriesCloner(EventCloner):
             # placeholder-like stuff in the pattern
             new_event.title = series.event_title_pattern.replace('{n}', str(n))
         db.session.flush()
+
+
+class EventPrivacyCloner(EventCloner):
+    name = 'event_privacy'
+    friendly_name = _('Privacy settings')
+    is_default = True
+
+    @property
+    def is_available(self):
+        return self._has_content(self.old_event)
+
+    def get_conflicts(self, target_event):
+        if self._has_content(target_event):
+            return [_('The target event already has privacy settings')]
+
+    def _has_content(self, event):
+        privacy_settings_data = privacy_settings.get_all(event, no_defaults=True)
+        return any(privacy_settings_data.values())
+
+    def run(self, new_event, cloners, shared_data, event_exists=False):
+        with db.session.no_autoflush:
+            self._clone_privacy_settings(new_event)
+        db.session.flush()
+
+    def _clone_privacy_settings(self, new_event):
+        privacy_settings.set_multi(new_event, privacy_settings.get_all(self.old_event, no_defaults=True))

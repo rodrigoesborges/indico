@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -65,6 +65,10 @@ class EditingTag(db.Model):
     def verbose_title(self):
         """Properly formatted title, including tag code."""
         return f'{self.code}: {self.title}'
+
+    def log(self, *args, **kwargs):
+        """Log with prefilled metadata for the tag."""
+        return self.event.log(*args, meta={'editing_tag_id': self.id}, **kwargs)
 
     def __repr__(self):
         return format_repr(self, 'id', 'event_id', system=False, _text=self.title)

@@ -1,12 +1,12 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
 from flask import request
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, undefer
 
 from indico.core.db import db
 from indico.modules.events.registration.models.form_fields import RegistrationFormFieldData
@@ -83,9 +83,16 @@ class RegistrationListGenerator(ListGeneratorBase):
                 'filter_choices': registration_tag_choices,
                 'filter_only': True
             },
+            'receipts_present': {
+                'title': _('Has documents'),
+                'filter_choices': {
+                    '0': _('No'),
+                    '1': _('Yes')
+                }
+            },
         }
         self.personal_items = ('title', 'first_name', 'last_name', 'email', 'position', 'affiliation', 'address',
-                               'phone', 'country')
+                               'phone', 'country', 'picture')
         self.list_config = self._get_config()
 
     def _get_registration_tag_choices(self):
@@ -106,7 +113,7 @@ class RegistrationListGenerator(ListGeneratorBase):
                                                          personal_data_type=PersonalDataType[item_id]).one()
             result.append({'id': field.id, 'caption': field.title})
         for item_id in [x for x in self.static_items if x in ids]:
-            result.append({'id': item_id, 'caption': self.static_items[item_id]['title']})
+            result.append({'id': item_id, 'caption': self.static_items[item_id]['title']})  # noqa: PERF401
         return result
 
     def _column_ids_to_db(self, ids):
@@ -122,10 +129,7 @@ class RegistrationListGenerator(ListGeneratorBase):
         return result
 
     def _get_sorted_regform_items(self, item_ids):
-        """
-        Return the form items ordered by their position in the registration form.
-        """
-
+        """Return the form items ordered by their position in the registration form."""
         if not item_ids:
             return []
         return (RegistrationFormItem.query
@@ -152,7 +156,8 @@ class RegistrationListGenerator(ListGeneratorBase):
                 .with_parent(self.regform)
                 .filter(~Registration.is_deleted)
                 .options(joinedload('data').joinedload('field_data').joinedload('field'),
-                         joinedload('tags'))
+                         joinedload('tags'),
+                         undefer('num_receipt_files'))
                 .order_by(db.func.lower(Registration.last_name), db.func.lower(Registration.first_name)))
 
     def _filter_list_entries(self, query, filters):
@@ -196,6 +201,12 @@ class RegistrationListGenerator(ListGeneratorBase):
         if 'tags_absent' in filters['items']:
             tag_ids = [int(tag_id) for tag_id in filters['items']['tags_absent']]
             items_criteria.append(~Registration.tags.any(RegistrationTag.id.in_(tag_ids)))
+
+        if 'receipts_present' in filters['items']:
+            receipts_present_values = filters['items']['receipts_present']
+            # If both values 'true' and 'false' are selected, there's no point in filtering
+            if len(receipts_present_values) == 1:
+                items_criteria.append(Registration.receipt_files.any() == bool(int(receipts_present_values[0])))
 
         if field_filters:
             subquery = (RegistrationData.query

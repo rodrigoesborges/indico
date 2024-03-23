@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -57,13 +57,8 @@ class DesignerImageFile(StoredFileMixin, db.Model):
         path_segments = ['designer_templates', strict_str(self.template.id), 'images']
         self.assign_id()
         filename = f'{self.id}-{self.filename}'
-        path = posixpath.join(*(path_segments + [filename]))
+        path = posixpath.join(*path_segments, filename)
         return config.ATTACHMENT_STORAGE, path
 
     def __repr__(self):
-        return '<DesignerImageFile({}, {}, {}, {})>'.format(
-            self.id,
-            self.template_id,
-            self.filename,
-            self.content_type
-        )
+        return f'<DesignerImageFile({self.id}, {self.template_id}, {self.filename}, {self.content_type})>'

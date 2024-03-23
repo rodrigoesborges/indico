@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -36,7 +36,7 @@ def _make_occurrence_date_filter(date_column, default_values, room_columns, valu
     return days_until == notification_before_days
 
 
-def _print_occurrences(user, occurrences, _defaults={}, _overrides={}):
+def _print_occurrences(user, occurrences, _defaults={}, _overrides={}):  # noqa: B006
     if not _defaults or not _overrides:
         _defaults.update({RepeatFrequency.WEEK: rb_settings.get('notification_before_days_weekly'),
                           RepeatFrequency.MONTH: rb_settings.get('notification_before_days_monthly'),

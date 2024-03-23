@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -112,7 +112,7 @@ def test_nth_parent(category_family):
 
 
 def test_is_descendant_of(category_family):
-    grandpa, dad, son, sibling = category_family
+    grandpa, dad, son = category_family[:3]
 
     assert not dad.is_descendant_of(dad)
     assert not dad.is_descendant_of(son)
@@ -122,7 +122,7 @@ def test_is_descendant_of(category_family):
 
 
 def test_visibility_horizon_default(category_family):
-    grandpa, dad, son, sibling = category_family
+    grandpa, dad, son = category_family[:3]
 
     # default settings, no overriding
     assert son.own_visibility_horizon == grandpa

@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -50,16 +50,24 @@ module.exports = env => {
       'jquery': 'jQuery',
       'moment': 'moment',
       'react': '_IndicoCoreReact',
+      'react-dnd': '_IndicoCoreReactDnd',
       'react-dom': '_IndicoCoreReactDom',
       'react-redux': '_IndicoCoreReactRedux',
+      'react-router': '_IndicoCoreReactRouter',
+      'react-router-dom': '_IndicoCoreReactRouterDom',
       'prop-types': '_IndicoCorePropTypes',
       'redux': '_IndicoCoreRedux',
       'semantic-ui-react': '_IndicoCoreSUIR',
       'react-final-form': '_IndicoCoreReactFinalForm',
       'indico/react/components': '_IndicoReactComponents',
+      'indico/react/components/syncedInputs': '_IndicoSyncedInputs',
+      'indico/react/forms': '_IndicoReactForm',
+      'indico/react/forms/fields': '_IndicoReactFormField',
       'indico/react/i18n': '_IndicoReactI18n',
+      'indico/react/util': '_IndicoReactUtil',
       'indico/utils/axios': '_IndicoUtilsAxios',
       'indico/utils/date': '_IndicoUtilsDate',
+      'indico/utils/case': '_IndicoUtilsCase',
       'indico/utils/plugins': '_IndicoUtilsPlugins',
       'indico/react/components/principals/imperative': '_IndicoPrincipalsImperative',
     },

@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -23,6 +23,14 @@ import {$T} from 'indico/utils/i18n';
           $('.regform-download-attachments').toggleClass(
             'disabled',
             !$('.list input:checkbox:checked[data-has-files=true]').length
+          );
+        })
+        .trigger('change');
+      $('table.i-table input.select-row')
+        .on('change', function() {
+          $('.regform-download-documents').toggleClass(
+            'disabled',
+            !$('.list input:checkbox:checked[data-has-documents=true]').length
           );
         })
         .trigger('change');
@@ -121,5 +129,7 @@ import {$T} from 'indico/utils/i18n';
         }
       },
     });
+
+    handleRegListRowSelection();
   };
 })(window);

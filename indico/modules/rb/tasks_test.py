@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -15,8 +15,6 @@ from indico.modules.rb import rb_settings
 from indico.modules.rb.models.reservations import RepeatFrequency
 from indico.modules.rb.tasks import roombooking_end_notifications, roombooking_occurrences
 
-
-pytest_plugins = 'indico.modules.rb.testing.fixtures'
 
 settings = {
     'notification_before_days': 2,

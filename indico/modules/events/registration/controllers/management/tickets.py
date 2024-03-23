@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -38,7 +38,7 @@ class RHRegistrationFormTickets(RHManageRegFormBase):
     """Display and modify ticket settings."""
 
     def _process(self):
-        form = TicketsForm(obj=self.regform, event=self.event)
+        form = TicketsForm(obj=self.regform, regform=self.regform, event=self.event)
         if form.validate_on_submit():
             form.populate_obj(self.regform)
             db.session.flush()

@@ -1,14 +1,11 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
 import pytz
-
-
-pytest_plugins = 'indico.modules.rb.testing.fixtures'
 
 
 def test_serialize_room_api(dummy_room):
@@ -39,7 +36,7 @@ def test_serialize_reservation(dummy_reservation):
     assert ReservationLegacyAPISchema().dump(dummy_reservation) == {
         'bookedForName': 'Guinea Pig',
         'booked_for_user_email': '1337@example.test',
-        'bookingUrl': 'http://localhost/rooms/booking/1',
+        'bookingUrl': 'http://localhost/rooms/booking/420',
         'endDT': dummy_reservation.end_dt.replace(tzinfo=pytz.utc),
         'id': dummy_reservation.id,
         'isConfirmed': True,

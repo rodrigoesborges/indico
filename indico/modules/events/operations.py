@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -212,7 +212,6 @@ def clone_into_event(source_event, target_event, cloners):
     :param target_event: The `Event` to clone data into;
     :param cloners: A set containing the names of all enabled cloners.
     """
-
     # Run the modular cloning system
     g.importing_event = True
     used_cloners = EventCloner.run_cloners(source_event, target_event, cloners, event_exists=True)
@@ -294,6 +293,7 @@ def update_event_protection(event, data, *, _extra_log_fields=None):
                       'visibility': {'title': 'Visibility', 'type': 'string',
                                      'convert': lambda changes: [format_visibility(event, x) for x in changes]},
                       'public_regform_access': 'Public registration form access',
+                      'subcontrib_speakers_can_submit': 'Subcontribution speakers submission privileges',
                       **(_extra_log_fields or {})}
         event.log(EventLogRealm.management, LogKind.change, 'Event', 'Protection updated', session.user,
                   data={'Changes': make_diff_log(changes, log_fields)})

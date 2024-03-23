@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -60,7 +60,7 @@ class HiddenCheckbox(CheckboxInput, HiddenInput):
 
 
 class JinjaWidget:
-    """Render a field using a custom Jinja template
+    """Render a field using a custom Jinja template.
 
     :param template: The template to render
     :param plugin: The plugin or plugin name containing the template
@@ -111,19 +111,21 @@ class PasswordWidget(JinjaWidget):
         return super().__call__(field, input_args=kwargs)
 
 
-class CKEditorWidget(JinjaWidget):
-    """Render a CKEditor WYSIWYG editor.
+class TinyMCEWidget(JinjaWidget):
+    """Render a TinyMCE WYSIWYG editor.
 
     :param images: Whether to allow images.
-    :param html_embed: Whether to enable raw HTML embedding.
+    :param absolute_urls: Whether to use fully absolute URLs for links/images.
+                          This MUST be set for emails, and used together with
+                          the `NoRelativeURLs` validator on the field.
     :param height: The height of the editor.
 
-    If the form has a ``ckeditor_upload_url`` attribute and images are enabled,
+    If the form has a ``editor_upload_url`` attribute and images are enabled,
     the editor will allow pasting/selecting images and upload them using that URL.
     """
 
-    def __init__(self, *, images=False, html_embed=False, height=475):
-        super().__init__('forms/ckeditor_widget.html', images=images, html_embed=html_embed, height=height)
+    def __init__(self, *, images=False, absolute_urls=False, height=600):
+        super().__init__('forms/tinymce_widget.html', images=images, absolute_urls=absolute_urls, height=height)
 
 
 class SwitchWidget(JinjaWidget):
@@ -146,8 +148,8 @@ class SwitchWidget(JinjaWidget):
                                 confirm_disable=self.confirm_disable)
 
 
-class RemoteDropdownWidget(JinjaWidget):
-    """Render a SUI Dropdown which can dynamically fetch results.
+class DropdownWidget(JinjaWidget):
+    """Render a SUI Dropdown which can dynamically fetch results or be directly passed the choices.
 
     :param search_url: The URL used to retrieve items.
     :param search_method: The method used to retrieve items.
@@ -164,10 +166,14 @@ class RemoteDropdownWidget(JinjaWidget):
                         item label.
     :param search_field: The attribute of the response used to search
                          in locally available data.
+    :param choices: The dropdown choices when not fetching dynamically.
+    :param allow_additions: Whether to allow adding new values to the options.
+    :param multiple: Whether to allow selecting multiple values.
     """
 
-    def __init__(self, search_url=None, search_method='GET', min_trigger_length=3, allow_by_id=False, preload=False,
-                 value_field='id', label_field='name', search_field='name', inline_js=False):
+    def __init__(self, *, search_url=None, search_method='GET', min_trigger_length=3, allow_by_id=False, preload=False,
+                 value_field='id', label_field='name', search_field='name', choices=None, allow_additions=False,
+                 multiple=False, inline_js=False):
         self.min_trigger_length = min_trigger_length
         self.allow_by_id = allow_by_id
         self.preload = preload
@@ -176,16 +182,22 @@ class RemoteDropdownWidget(JinjaWidget):
         self.value_field = value_field
         self.label_field = label_field
         self.search_field = search_field
-        super().__init__('forms/sui_remote_search_dropdown_widget.html', inline_js=inline_js)
+        self.choices = choices
+        self.allow_additions = allow_additions
+        self.multiple = multiple
+        super().__init__('forms/sui_search_dropdown_widget.html', inline_js=inline_js)
 
     def __call__(self, field, **kwargs):
+        choices = self.choices if self.choices is not None else getattr(field, 'serialized_choices', [])
         return super().__call__(field,
                                 search_url=getattr(field, 'search_url', self.search_url),
                                 search_method=self.search_method,
                                 search_payload=getattr(field, 'search_payload', None),
                                 min_trigger_length=self.min_trigger_length, preload=self.preload,
                                 allow_by_id=self.allow_by_id, value_field=self.value_field,
-                                label_field=self.label_field, search_field=self.search_field, input_args=kwargs)
+                                label_field=self.label_field, choices=choices,
+                                allow_additions=self.allow_additions, multiple=self.multiple,
+                                search_field=self.search_field, input_args=kwargs)
 
 
 class TypeaheadWidget(JinjaWidget):
@@ -269,7 +281,7 @@ class ColorPickerWidget(JinjaWidget):
 
 
 class PrefixedTextWidget(JinjaWidget):
-    """Render a TextInput with a prefix"""
+    """Render a TextInput with a prefix."""
 
     def __init__(self, prefix=None, show_field=True):
         super().__init__('forms/prefixed_text_widget.html', single_line=True, single_kwargs=True,

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -29,4 +29,4 @@ class SurveyLinkPlaceholder(Placeholder):
     @classmethod
     def render(cls, event, survey, **kwargs):
         url = url_for('.display_survey_form', survey, survey.locator.token, _external=True)
-        return Markup('<a href="{url}" title="{title}">{url}</a>'.format(url=url, title=escape(survey.title)))
+        return Markup(f'<a href="{url}" title="{escape(survey.title)}">{url}</a>')

@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -18,7 +18,6 @@
 @mixin text-input-base {
   @include border-all();
   @include default-border-radius();
-  box-sizing: border-box;
   @include transition(border-color 0.12s);
   color: $black;
   font-family: inherit;
@@ -51,7 +50,8 @@
   > input[type='text'],
   > input[type='time'],
   > input[type='url'],
-  > input[type='week'] {
+  > input[type='week'],
+  > .tox-tinymce {
     @include text-input-base();
   }
 
@@ -433,4 +433,9 @@ dd > .i-has-action {
 code.placeholder {
   font-style: normal;
   font-size: 0.9em;
+}
+
+// The .hidden style should not apply to some elements
+.ui.checkbox > input.hidden {
+  display: inline-block !important;
 }

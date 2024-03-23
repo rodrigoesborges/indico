@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -122,8 +122,4 @@ class BlockedRoom(db.Model):
             notify_request_response(self)
 
     def __repr__(self):
-        return '<BlockedRoom({}, {}, {})>'.format(
-            self.blocking_id,
-            self.room_id,
-            self.state_name
-        )
+        return f'<BlockedRoom({self.blocking_id}, {self.room_id}, {self.state_name})>'

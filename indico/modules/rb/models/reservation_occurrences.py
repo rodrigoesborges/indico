@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -10,6 +10,7 @@ from math import ceil
 
 from dateutil import rrule
 from sqlalchemy import Date, or_
+from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import contains_eager, defaultload
 from sqlalchemy.sql import cast
@@ -17,6 +18,8 @@ from sqlalchemy.sql import cast
 from indico.core import signals
 from indico.core.db import db
 from indico.core.db.sqlalchemy import PyIntEnum
+from indico.core.db.sqlalchemy.links import LinkMixin, LinkType
+from indico.core.db.sqlalchemy.util.models import auto_table_args
 from indico.core.db.sqlalchemy.util.queries import db_dates_overlap
 from indico.core.errors import IndicoError
 from indico.modules.rb.models.reservation_edit_logs import ReservationEditLog
@@ -36,6 +39,32 @@ class ReservationOccurrenceState(IndicoIntEnum):
     rejected = 4
 
 
+class ReservationOccurrenceLink(LinkMixin, db.Model):
+    __tablename__ = 'reservation_occurrence_links'
+
+    @declared_attr
+    def __table_args__(cls):
+        return auto_table_args(cls, schema='roombooking')
+
+    allowed_link_types = {LinkType.event, LinkType.contribution, LinkType.session_block}
+    events_backref_name = 'all_room_reservation_occurrence_links'
+    link_backref_name = 'room_reservation_occurrence_links'
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    def __repr__(self):
+        return format_repr(self, 'id', _rawtext=self.link_repr)
+
+    # relationship backrefs:
+    # - reservation_occurrence (ReservationOccurrence.link)
+
+
+ReservationOccurrenceLink.register_link_events()
+
+
 class ReservationOccurrence(db.Model):
     __tablename__ = 'reservation_occurrences'
     __table_args__ = (db.CheckConstraint("rejection_reason != ''", 'rejection_reason_not_empty'),
@@ -53,6 +82,12 @@ class ReservationOccurrence(db.Model):
         db.ForeignKey('roombooking.reservations.id'),
         nullable=False,
         primary_key=True
+    )
+    link_id = db.Column(
+        db.Integer,
+        db.ForeignKey('roombooking.reservation_occurrence_links.id'),
+        nullable=True,
+        index=True
     )
     start_dt = db.Column(
         db.DateTime,
@@ -78,6 +113,15 @@ class ReservationOccurrence(db.Model):
     rejection_reason = db.Column(
         db.String,
         nullable=True
+    )
+
+    link = db.relationship(
+        'ReservationOccurrenceLink',
+        lazy=True,
+        backref=db.backref(
+            'reservation_occurrence',
+            uselist=False
+        )
     )
 
     # relationship backrefs:
@@ -130,16 +174,34 @@ class ReservationOccurrence(db.Model):
 
     @classmethod
     def iter_create_occurrences(cls, start, end, repetition):
-        for start in cls.iter_start_time(start, end, repetition):
-            end = datetime.combine(start.date(), end.time())
-            yield ReservationOccurrence(start_dt=start, end_dt=end)
+        for occ_start in cls.iter_start_time(start, end, repetition):
+            end = datetime.combine(occ_start.date(), end.time())
+            yield ReservationOccurrence(start_dt=occ_start, end_dt=end)
+
+    @staticmethod
+    def map_recurrence_weekdays_to_rrule(weekdays):
+        """Map weekdays from database to rrule weekdays."""
+        # Return none if no weekdays are provided
+        if not weekdays:
+            return None
+
+        weekdays_map = {
+            'mon': rrule.MO,
+            'tue': rrule.TU,
+            'wed': rrule.WE,
+            'thu': rrule.TH,
+            'fri': rrule.FR,
+            'sat': rrule.SA,
+            'sun': rrule.SU
+        }
+
+        return [weekdays_map[day] for day in weekdays]
 
     @staticmethod
     def iter_start_time(start, end, repetition):
         from indico.modules.rb.models.reservations import RepeatFrequency
 
-        repeat_frequency, repeat_interval = repetition
-
+        repeat_frequency, repeat_interval, recurrence_weekdays = repetition
         if repeat_frequency == RepeatFrequency.NEVER:
             return [start]
 
@@ -151,7 +213,9 @@ class ReservationOccurrence(db.Model):
         elif repeat_frequency == RepeatFrequency.WEEK:
             if repeat_interval <= 0:
                 raise IndicoError('Unsupported interval')
-            return rrule.rrule(rrule.WEEKLY, dtstart=start, until=end, interval=repeat_interval)
+            return rrule.rrule(rrule.WEEKLY, dtstart=start, until=end,
+                               interval=repeat_interval,
+                               byweekday=ReservationOccurrence.map_recurrence_weekdays_to_rrule(recurrence_weekdays))
 
         elif repeat_frequency == RepeatFrequency.MONTH:
             if repeat_interval == 0:
@@ -185,6 +249,15 @@ class ReservationOccurrence(db.Model):
                 .options(contains_eager(ReservationOccurrence.reservation))
                 .options(cls.NO_RESERVATION_USER_STRATEGY))
 
+    @property
+    def linked_object(self):
+        return self.link.object if self.link else None
+
+    @linked_object.setter
+    def linked_object(self, obj):
+        assert self.link is None
+        self.link = ReservationOccurrenceLink(object=obj)
+
     def can_reject(self, user, allow_admin=True):
         if not self.is_valid:
             return False
@@ -199,7 +272,7 @@ class ReservationOccurrence(db.Model):
         booked_or_owned_by_user = booking.is_owned_by(user) or booking.is_booked_for(user)
         if booking.is_rejected or booking.is_cancelled or booking.is_archived:
             return False
-        if booked_or_owned_by_user and self.is_within_cancel_grace_period:
+        if booked_or_owned_by_user and (booking.is_pending or self.is_within_cancel_grace_period):
             return True
         return allow_admin and rb_is_admin(user)
 

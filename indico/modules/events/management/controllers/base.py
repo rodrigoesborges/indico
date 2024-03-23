@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -44,9 +44,7 @@ class RHManageEventBase(RHEventBase, ManageEventMixin):
 
 
 class RHContributionPersonListMixin:
-    """
-    List of persons somehow related to contributions (co-authors, speakers...).
-    """
+    """List of persons somehow related to contributions (co-authors, speakers...)."""
 
     @property
     def _membership_filter(self):
@@ -68,9 +66,9 @@ class RHContributionPersonListMixin:
         for contrib_person in contribution_persons:
             person_dict = contribution_persons_dict[contrib_person.person.identifier]
             person_dict['identifier'] = contrib_person.person.identifier
-            person_dict['full_name'] = contrib_person.person.full_name
-            person_dict['email'] = contrib_person.person.email
-            person_dict['affiliation'] = contrib_person.person.affiliation
+            person_dict['full_name'] = contrib_person.display_full_name
+            person_dict['email'] = contrib_person.email
+            person_dict['affiliation'] = contrib_person.affiliation
             person_dict['speaker'] |= contrib_person.is_speaker
             person_dict['primary_author'] |= contrib_person.author_type == AuthorType.primary
             person_dict['secondary_author'] |= contrib_person.author_type == AuthorType.secondary

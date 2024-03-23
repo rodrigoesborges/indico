@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -55,7 +55,7 @@ DICTIONARIES = {
 class MockTranslations(Translations):
     """
     Mock `Translations` class - returns a mock dictionary
-    based on the selected locale
+    based on the selected locale.
     """
 
     def __init__(self):

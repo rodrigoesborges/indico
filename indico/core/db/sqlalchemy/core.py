@@ -1,12 +1,11 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
 import sys
-import typing as t
 from contextlib import contextmanager
 from functools import partial
 from threading import get_ident
@@ -21,6 +20,7 @@ from sqlalchemy.orm import CompositeProperty, mapper
 from sqlalchemy.sql.ddl import CreateSchema
 
 from indico.core import signals
+from indico.core.db.sqlalchemy.custom.array_is_unique import create_array_is_unique_function
 from indico.core.db.sqlalchemy.custom.natsort import create_natsort_function
 from indico.core.db.sqlalchemy.custom.unaccent import create_unaccent_function
 from indico.core.db.sqlalchemy.util.models import IndicoBaseQuery, IndicoModel
@@ -28,6 +28,7 @@ from indico.core.db.sqlalchemy.util.models import IndicoBaseQuery, IndicoModel
 
 class ConstraintViolated(Exception):
     """Indicate that a constraint trigger was violated."""
+
     def __init__(self, message, orig):
         super().__init__(message)
         self.orig = orig
@@ -46,10 +47,10 @@ def handle_sqlalchemy_database_error():
                                that enforce consistenct
     :raise DatabaseError: any other database error is simply re-raised
     """
-    exc_class, exc, tb = sys.exc_info()
+    exc = sys.exc_info()[1]
     if exc.orig.pgcode is None or not exc.orig.pgcode.startswith('INDX'):
         # not an indico exception
-        raise
+        raise  # noqa: PLE0704
     msg = exc.orig.diag.message_primary
     if exc.orig.diag.message_detail:
         msg += f': {exc.orig.diag.message_detail}'
@@ -65,7 +66,7 @@ def _after_commit(*args, **kwargs):
 
 
 class IndicoSQLAlchemy(SQLAlchemy):
-    Model: t.Type[IndicoModel]
+    Model: type[IndicoModel]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -138,6 +139,7 @@ def _before_create(target, connection, **kw):
     # Create our custom functions
     create_unaccent_function(connection)
     create_natsort_function(connection)
+    create_array_is_unique_function(connection)
 
 
 def _mapper_configured(mapper, class_):

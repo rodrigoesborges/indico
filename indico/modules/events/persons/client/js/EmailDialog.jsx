@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -11,9 +11,12 @@ import React, {useState} from 'react';
 import {FormSpy} from 'react-final-form';
 import {Form, Button, Message, Input, Popup, Icon} from 'semantic-ui-react';
 
-import {FinalEmailList} from 'indico/react/components';
-import PlaceholderInfo from 'indico/react/components/PlaceholderInfo';
-import TextEditor, {FinalTextEditor} from 'indico/react/components/TextEditor';
+import {
+  FinalEmailList,
+  FinalTinyMCETextEditor,
+  PlaceholderInfo,
+  TinyMCETextEditor,
+} from 'indico/react/components';
 import {FinalCheckbox, FinalDropdown, FinalInput} from 'indico/react/forms';
 import {FinalModalForm} from 'indico/react/forms/final-form';
 import {Translate, PluralTranslate, Singular, Plural, Param} from 'indico/react/i18n';
@@ -91,7 +94,6 @@ export function EmailDialog({
       setPreview(undefined);
       return;
     }
-    body = body.getData ? body.getData() : body;
     const {data} = await indicoAxios.post(previewURL, {body, subject, ...previewContext});
     setPreview(data);
   };
@@ -125,7 +127,7 @@ export function EmailDialog({
       </Form.Field>
       <Form.Field>
         <Translate as="label">Email body</Translate>
-        <TextEditor
+        <TinyMCETextEditor
           value={preview.body}
           config={{showToolbar: false}}
           onChange={v => v}
@@ -149,15 +151,15 @@ export function EmailDialog({
           required
         />
         <FinalInput name="subject" label={Translate.string('Subject')} required />
-        <FinalTextEditor
+        <FinalTinyMCETextEditor
           name="body"
           label={Translate.string('Email body')}
           required
-          config={{images: false}}
+          config={{images: false, forceAbsoluteURLs: true}}
         />
         {placeholders.length > 0 && (
           <Form.Field>
-            <PlaceholderInfo placeholders={placeholders} />
+            <PlaceholderInfo placeholders={placeholders} defaultOpen />
           </Form.Field>
         )}
         {recipientsField || <RecipientsField recipients={recipients} />}

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -7,16 +7,18 @@
 
 import click
 from flask_multipass import IdentityInfo
+from sqlalchemy.exc import IntegrityError
 from terminaltables import AsciiTable
 
 from indico.cli.core import cli_group
+from indico.core import signals
 from indico.core.db import db
 from indico.core.oauth.models.personal_tokens import PersonalToken
 from indico.core.oauth.scopes import SCOPES
 from indico.modules.auth import Identity
 from indico.modules.users import User
 from indico.modules.users.operations import create_user
-from indico.modules.users.util import search_users
+from indico.modules.users.util import anonymize_user, search_users
 from indico.util.console import cformat, prompt_email, prompt_pass
 from indico.util.date_time import utc_to_server
 
@@ -42,6 +44,7 @@ def _print_user_info(user):
     print(f'  Family name: {user.last_name}')
     print(f'  Email: {user.email}')
     print(f'  Affiliation: {user.affiliation}')
+    print(f'  Last login: {user.last_login_dt.date() if user.last_login_dt else "never"}')
     if flags:
         print(cformat('  Flags: {}'.format(', '.join(flags))))
     print()
@@ -91,8 +94,8 @@ def search(substring, include_deleted, include_pending, include_blocked, include
                                       _safe_lower(x.data['email'])))
     if users:
         table_data = [['ID', 'First Name', 'Last Name', 'Email', 'Affiliation']]
-        for user in users:
-            table_data.append([str(user.id), user.first_name, user.last_name, user.email, user.affiliation])
+        table_data.extend([str(user.id), user.first_name, user.last_name, user.email, user.affiliation]
+                          for user in users)
         table = AsciiTable(table_data, cformat('%{white!}Users%{reset}'))
         table.justify_columns[0] = 'right'
         print(table.table)
@@ -217,6 +220,58 @@ def unblock(user_id):
         click.secho('Successfully unblocked user', fg='green')
 
 
+@cli.command()
+@click.argument('user_id', type=int)
+def anonymize(user_id):
+    """Anonymize a given user.
+
+    This will remove all personal data about the given user including
+    their name, affiliation and emails. Note that any data tied to events
+    such as registrations or speaker roles will not be deleted.
+    """
+    if (user := User.get(user_id)) is None:
+        click.secho('This user does not exist', fg='red')
+        return
+    _print_user_info(user)
+    if not click.confirm(click.style('Permanently anonymize this user?', fg='yellow')):
+        return
+
+    anonymize_user(user)
+    db.session.commit()
+    click.secho('Successfully anonymized user', fg='green')
+
+
+@cli.command()
+@click.argument('user_id', type=int)
+def delete(user_id):
+    """Delete a given user.
+
+    This will completely remove the user and everything
+    they are connected to. Use at your own risk.
+    """
+    user = User.get(user_id)
+    if user is None:
+        click.secho('This user does not exist', fg='red')
+        return
+    _print_user_info(user)
+    if not click.confirm(click.style('Permanently delete this user?', fg='yellow')):
+        return
+
+    signals.users.db_deleted.send(user, flushed=False)
+
+    try:
+        db.session.delete(user)
+        db.session.flush()
+    except IntegrityError as e:
+        db.session.rollback()
+        click.secho('Could not delete delete user', fg='red')
+        click.echo(e)
+    else:
+        signals.users.db_deleted.send(user, flushed=True)
+        db.session.commit()
+        click.secho('Successfully deleted user', fg='green')
+
+
 @cli.group('token')
 def token_cli():
     """Manage personal user tokens."""
@@ -269,7 +324,7 @@ def token_list(user_id, verbose):
 def _show_available_scopes(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
-    table_data = [['Name', 'Description']] + sorted(SCOPES.items())
+    table_data = [['Name', 'Description'], *sorted(SCOPES.items())]
     click.echo(AsciiTable(table_data, cformat('%{white!}Available scopes%{reset}')).table)
     ctx.exit()
 

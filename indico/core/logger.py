@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -64,8 +64,7 @@ class Logger:
         if not os.path.exists(path):
             default_path = os.path.join(app.root_path, 'logging.yaml.sample')
             warnings.warn('Logging config file not found; using defaults. '
-                          'Copy {default_path} to {path} to get rid of this warning.'
-                          .format(path=path, default_path=default_path), stacklevel=2)
+                          f'Copy {default_path} to {path} to get rid of this warning.', stacklevel=2)
             path = default_path
         with open(path) as f:
             data = yaml.safe_load(f)

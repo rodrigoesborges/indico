@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -16,4 +16,17 @@ export const fileDetailsShape = PropTypes.shape({
     ongoing: PropTypes.bool.isRequired,
     progress: PropTypes.number.isRequired,
   }),
+});
+
+export const dropzoneShape = PropTypes.shape({
+  getRootProps: PropTypes.func.isRequired,
+  getInputProps: PropTypes.func.isRequired,
+  isDragActive: PropTypes.bool.isRequired,
+  open: PropTypes.func,
+});
+
+export const fileActionShape = PropTypes.shape({
+  icon: PropTypes.string.isRequired,
+  color: PropTypes.string,
+  onClick: PropTypes.func.isRequired,
 });

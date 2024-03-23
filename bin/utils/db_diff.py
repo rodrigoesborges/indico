@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -57,24 +57,6 @@ def _build_conn_string(dbname):
             parts += [':', pgport]
     parts += ['/', dbname]
     return ''.join(parts)
-
-
-def _which(program):
-    # taken from http://stackoverflow.com/a/377028/298479
-    def _is_exe(fpath):
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
-
-    fpath, fname = os.path.split(program)
-    if fpath:
-        if _is_exe(program):
-            return program
-    else:
-        for path in os.environ['PATH'].split(os.pathsep):
-            path = path.strip('"')
-            exe_file = os.path.join(path, program)
-            if _is_exe(exe_file):
-                return exe_file
-    return None
 
 
 @click.command()

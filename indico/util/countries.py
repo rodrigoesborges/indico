@@ -1,16 +1,18 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
+from functools import lru_cache
+
 import pycountry
 from werkzeug.datastructures import ImmutableDict
 
 from indico.core.config import config
-from indico.util.caching import memoize
 from indico.util.i18n import get_current_locale
+from indico.util.string import remove_accents, str_to_ascii
 
 
 def get_countries(locale=None):
@@ -19,12 +21,12 @@ def get_countries(locale=None):
     return _get_countries(locale)
 
 
-@memoize
+@lru_cache
 def _get_countries(locale):
     _countries = {country.alpha_2: getattr(country, 'common_name', country.name) for country in pycountry.countries}
     _countries = {code: locale.territories.get(code, name) for code, name in _countries.items()}
     _countries.update(config.CUSTOM_COUNTRIES)
-    return ImmutableDict(_countries)
+    return ImmutableDict(sorted(_countries.items(), key=lambda item: str_to_ascii(remove_accents(item[1]))))
 
 
 def get_country(code, locale=None):
@@ -47,7 +49,7 @@ def get_country_reverse(name, locale=None):
     return next((code for code, title in get_countries(locale).items() if title == name), None)
 
 
-@memoize
+@lru_cache
 def _get_country(code, locale):
     try:
         return _get_countries(locale)[code]

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -130,7 +130,8 @@ def get_overridable_template_name(name, plugin, core_prefix='', plugin_prefix=''
 def get_template_module(template_name_or_list, **context):
     """Return the python module of a template.
 
-    This allows you to call e.g. macros inside it from Python code."""
+    This allows you to call e.g. macros inside it from Python code.
+    """
     current_app.update_template_context(context)
     tpl = current_app.jinja_env.get_or_select_template(template_name_or_list)
     return tpl.make_module(context)
@@ -212,7 +213,7 @@ def call_template_hook(*name, **kwargs):
         if snippet.markup:
             value = Markup(value)
         values.append((snippet.priority, value))
-    values.sort()
+    values.sort(key=lambda x: (x[0], str(x[1])))
     if as_list:
         return [x[1] for x in values]
     else:
@@ -263,7 +264,7 @@ class CustomizationLoader(BaseLoader):
         # This is almost exactly what PluginPrefixLoader.load() does, but we have
         # to replicate it here since we need to handle `~` and use our custom
         # `get_source` to get the overridden template
-        plugin_name, tpl_name = name.split(':', 1)
+        plugin_name = name.split(':', 1)[0]
         if plugin_name[0] == '~':
             plugin_name = plugin_name[1:]
         plugin = get_state(current_app).plugin_engine.get_plugin(plugin_name)

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -96,7 +96,7 @@ class RHMenuEntryEdit(RHMenuEntryEditBase):
             form_cls = MenuLinkForm
         elif self.entry.is_page:
             form_cls = MenuPageForm
-            form_kwargs['ckeditor_upload_url'] = url_for('attachments.upload_ckeditor', self.event)
+            form_kwargs['editor_upload_url'] = url_for('attachments.upload_editor', self.event)
             defaults['html'] = self.entry.page.html
         else:
             form_cls = MenuBuiltinEntryForm
@@ -128,11 +128,13 @@ class RHMenuEntryPosition(RHMenuEntryEditBase):
 
         if parent_id != self.entry.parent_id:
             if self.entry.type not in {MenuEntryType.user_link, MenuEntryType.page}:
-                raise BadRequest('Menu entry "{0}" cannot be moved to another menu: Invalid type "{0.type.name}".'
-                                 .format(self.entry))
+                raise BadRequest(
+                    f'Menu entry "{self.entry}" cannot be moved to another menu: Invalid type "{self.entry.type.name}".'
+                )
             if self.entry.is_root and self.entry.children:
-                raise BadRequest('Menu entry "{}" cannot be moved to another menu: Entry has nested entries.'
-                                 .format(self.entry))
+                raise BadRequest(
+                    f'Menu entry "{self.entry}" cannot be moved to another menu: Entry has nested entries.'
+                )
 
             parent_entry = None
             if parent_id is not None:
@@ -191,7 +193,7 @@ class RHMenuAddEntry(RHMenuBase):
             form_cls = MenuLinkForm
         elif entry_type == MenuEntryType.page.name:
             form_cls = MenuPageForm
-            form_kwargs['ckeditor_upload_url'] = url_for('attachments.upload_ckeditor', self.event)
+            form_kwargs['editor_upload_url'] = url_for('attachments.upload_editor', self.event)
         else:
             raise BadRequest
 

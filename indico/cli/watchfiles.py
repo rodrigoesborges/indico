@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -91,7 +91,7 @@ class Watchfiles:
             self._print_changes(changes)
             self._restart()
 
-    @functools.cache
+    @functools.cache  # noqa: B019
     def _get_root(self, path):
         return next((p for p in self._paths if path.is_relative_to(p)), None)
 

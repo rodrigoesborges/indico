@@ -15,7 +15,7 @@ Major Features
 Internationalization
 ^^^^^^^^^^^^^^^^^^^^
 
-- Nothing so far
+- New locale: English (Canada) (:pr:`6063`, thanks :user:`omegak`)
 
 Improvements
 ^^^^^^^^^^^^
@@ -28,15 +28,121 @@ Improvements
 - Allow room managers to add internal notes to bookings (:issue:`5746`, :pr:`5791`)
 - Support generating tickets and badges for each of the registrant's accompanying
   persons (:pr:`5424`)
-- Include current language in page metadata (:pr:`5894`, thanks :user:`foxbunny`)
 - Add keyboard shortcut (CTRL-SHIFT-A) to toggle room booking admin override (:pr:`5909`)
-- Make language list accessible (:issue:`5899`, :pr:`5903`, thanks :user:`foxbunny`)
+- Improve login page UI, allow overriding the logo URL (:data:`LOGIN_LOGO_URL` config option)
+  and using custom logos for auth providers (``logo_url`` in the auth provider settings)
+  (:pr:`5936`, thanks :user:`openprojects`)
+- Show only active registration counts on the registration form management dashboard, and add
+  an inactive registration count to the registration list (:pr:`5990`)
+- Store creation date of users and show it to admins (:pr:`5957`, thanks :user:`vasantvohra`)
+- Add option to hide links to Room Booking system for users who lack access (:pr:`5981`,
+  thanks :user:`SegiNyn`)
+- Support weekly room bookings that take place on multiple weekdays (:pr:`5829`, :pr:`6000`,
+  :issue:`5806`)
+- Hide events marked as invisible from builtin search results unless the user is a manager
+  (:pr:`5947`, thanks :user:`openprojects`)
+- Support sessions that expire at a certain date (specified by the used flask-multipass
+  provider) regardless of activity when using an external login method (:pr:`5907`, thanks
+  :user:`cbartz`)
+- Allow configuring future months threshold for categories (:issue:`2984`, :pr:`5928`, thanks
+  :user:`kewisch`)
+- Allow editors to edit their review comments on editables (:pr:`6008`)
+- Auto-linking of patterns in minutes (e.g. issue trackers, Github repos...) (:pr:`5998`)
+- Log editor actions in the Editing module (:pr:`6015`)
+- Grant subcontribution speakers submission privileges by default in newly created events
+  (:issue:`5905`, :pr:`6025`)
+- Stop overwhelmingly showing past events in the 'Events at hand' section in the user dashboard
+  (:pr:`6049`)
+- Add document templates to generate PDF receipts, certificates, and similar documents for
+  event participants (:pr:`5123`, :pr:`6078`)
+- Show which persons are external in the user search dialog (:pr:`6074`)
+- Add feature for users to export all data linked to them (:pr:`5757`)
+- Add Outlook online calendar button to share widget (:issue:`6075`, :pr:`6077`)
+- Remove Facebook and Google+ share widgets and make Twitter share button privacy-friendly
+  (:pr:`6077`)
+- Do not bother people registering using an invitation link with a CAPTCHA (:pr:`6095`)
+- Add option to allow people to register using an invitation link even if the event is
+  restricted (:pr:`6094`)
+- Improve editing notifications emails (:issue:`6027`, :pr:`6042`, :pr:`6154`)
+- Add a picture field for registration forms which can use the local webcam to take a picture
+  in addition to uploading one, and also supports cropping/rotating the picture (:pr:`5922`,
+  thanks :user:`SegiNyn`)
+- Use a more compact registration ticket QR code format which is faster to scan and less
+  likely to fail in poor lighting conditions (:pr:`6123`)
+- Add a legend to the category calendar, allowing to filter events either by category, venue,
+  room or keywords (:issue:`6105, 6106, 6128, 6148, 6149, 6127`, :pr:`6110, 6158, 6183`,
+  thanks :user:`Moliholy, unconventionaldotdev`)
+- Allow to configure a restrictive set of allowed keywords (:issue:`6127`, :pr:`6183`,
+  thanks :user:`Moliholy, unconventionaldotdev`).
+- Add week and day views in the category calendar and improve navigation controls
+  (:issue:`6108, 6129, 6107`, :pr:`6110`, thanks :user:`Moliholy, unconventionaldotdev`).
+- Add the ability to clone privacy settings (:pr:`6156`, thanks :user:`SegiNyn`)
+- Add option for managers to change the registration fee of a set of registrations (:issue:`6132`,
+  :pr:`6138`)
+- Add setting to configure whether room bookings require a reason (:issue:`6150`, :pr:`6155`,
+  thanks :user:`Moliholy, unconventionaldotdev`)
+- Add a "Picture" personal data field to registrations. When used, it allows including the
+  picture provided by the user on badges/tickets (:pr:`6160`, thanks :user:`vtran99`)
+- Support ``~~text~~`` to strike-out text in markdown (:pr:`6166`)
+- Add experimental support for creating Google Wallet tickets (opt-in via :data:`ENABLE_GOOGLE_WALLET`
+  ``indico.conf`` setting) (:pr:`6028`, thanks :user:`openprojects`)
+- Add option to exceptionally grant registration modification privileges to some registrants
+  (:issue:`5264`, :pr:`6152`, thanks :user:`Thanhphan1147`)
+- Add option to require users to agree to terms during signup or after they have been updated
+  (:issue:`5923`, :pr:`5925`, thanks :user:`kewisch`)
+- Add ``indico user delete`` CLI to attempt to permanently delete a user (:pr:`5838`)
+- Add ``indico user anonymize`` CLI to permanently anonymize a user (:pr:`5838`)
+- Add possibility to link room reservations to multiple events, session blocks and contributions
+  (:issue:`6113`, :pr:`6114`, thanks :user:`omegak, unconventionaldotdev`)
+- Store editable list filters in the browser's local storage (:pr:`6192`)
+- Take visibility restrictions into account in the atom feed (:pr:`5472`, thanks :user:`bpedersen2`)
+- Allow linking badge templates to registration forms in order to use custom fields in them
+  (:pr:`6088`)
+- Allow filtering the list of editables by tags (:issue:`6195`, :pr:`6197`)
+- Warn users with a dialog before their session expires and let them extend it (:pr:`6026`,
+  thanks :user:`SegiNyn`)
 
 Bugfixes
 ^^^^^^^^
 
 - Prevent room booking sidebar menu from overlapping with the user dropdown menu
   (:pr:`5910`)
+- Allow cancelling pending bookings even if they have already "started" (:pr:`5995`)
+- Disallow switching the repeat frequency of an existing room booking from weekly to monthly
+  or vice versa (:pr:`5999`)
+- Ignore deleted fields when computing the number of occupied slots for a registration (:pr:`6035`)
+- Show the description of a subcontribution in conference events (:issue:`5946`, :pr:`6056`)
+- Only block templates containing a QR code via ``is_ticket_blocked`` (:pr:`6062`)
+- Use custom map URL in event API if one is set (:pr:`6111`, thanks :user:`stine-fohrmann`)
+- Use the event timezone when scheduling call for abstracts/papers (:pr:`6139`)
+- Allow setting registration fees larger than 999999.99 (:pr:`6172`)
+- Populate fields such as first and last name from the multipass login provider (e.g. LDAP) during
+  sign-up regardless of synchronization settings (:pr:`6182`)
+- Hide redundant affiliations tooltip on the Participant Roles list (:pr:`6201`)
+
+Accessibility
+^^^^^^^^^^^^^
+
+- Include current language in page metadata (:pr:`5894`, thanks :user:`foxbunny`)
+- Make language list accessible (:issue:`5899`, :pr:`5903`, thanks :user:`foxbunny`)
+- Add accessible label to the main page link (:issue:`5934`, :pr:`5935`, thanks
+  :user:`foxbunny`)
+- Add bypass block links (:issue:`5932`, :pr:`5939`, thanks :user:`foxbunny`)
+- Make search fields more accessible (:issue:`5948`, :pr:`5950`, thanks :user:`foxbunny`)
+- Make search result status messages more accessible (:issue:`5949`, :pr:`5950`,
+  thanks :user:`foxbunny`)
+- Make search results tabs accessible (:issues:`5964`, :pr:`5965`, thanks :user:`foxbunny`)
+- Make timezone list accessible (:issue:`5908`, :pr:`5914`, thanks :user:`foxbunny`)
+- Make "Skip access checks" checkbox in search keyboard-accessible (:issue:`5952`, :pr:`5953`,
+  thanks :user:`foxbunny`)
+- Prevent icons from being announced to screen readers as random characters (:issue:`5985`,
+  :pr:`5986`, thanks :user:`foxbunny`)
+- Add proper labels to the captcha play and reload buttons (:issue:`6064`, :pr:`6080`,
+  :thanks:`foxbunny`)
+- Associate form labels with form controls in the registration form (:issue:`6059`, :issue:`6073`,
+  :pr:`6076`, thanks :user:`foxbunny`)
+- Make dropdown menu fully accessible (:issue:`5896`, :pr:`5897`, thanks :user:`foxbunny`)
+- Improve registration form color contrast and font sizes (:pr:`6098`, thanks :user:`foxbunny`)
 
 Internal Changes
 ^^^^^^^^^^^^^^^^
@@ -45,20 +151,81 @@ Internal Changes
   (:pr:`5734`)
 - Add ``event.is_field_data_locked`` signal, allowing plugins to lock registration form
   fields on a per-registration basis (:pr:`5424`)
+- Replace WYSIWYG (rich-text) editor with TinyMCE, due to the license and branding
+  requirements of the previous editor (:pr:`5938`)
+- Add a new Indico design system (:pr:`5914`, thanks :user:`foxbunny`)
+- Add ``event.registration_form_field_deleted`` signal, allowing plugins to handle
+  the removal of registration form fields (:pr:`5924`)
+- Add a tool ``bin/managemnent/icons_generate.py`` to generate CSS for icomoon icons based
+  on ``selection.json`` (:pr:`5986`, thanks :user:`foxbunny`)
+- Pass form class arguments to ``core.add_form_fields`` signal handlers (:pr:`6020`, thanks
+  :user:`vtran99`)
+- Support Python 3.12 (:pr:`5978`)
+- Remove watchman reloader support, use watchfiles instead (:pr:`5978`)
+- Improve ``indico i18n`` CLI to support plugin-related i18n operations (:issue:`5906`, :pr:`5961`,
+  thanks :user:`SegiNyn`)
+- Use `ruff <https://docs.astral.sh/ruff/>`_ for linting Python code (:pr:`6037`)
+- Add ``<ind-menu>`` custom element for managing drop-down menus (:issue:`5896`, :pr:`5897`,
+  thanks :user:`foxbunny`)
 
 
 ----
 
 
-Version 3.2.8
+Version 3.2.9
 -------------
 
-*Unreleased*
+*Released on January 23, 2024*
+
+Security fixes
+^^^^^^^^^^^^^^
+
+- Update `Werkzeug <https://pypi.org/project/Werkzeug/>`_ library due to a
+  DoS vulnerability while parsing certain file uploads (:cve:`CVE-2023-46136`)
+- Fix registration form CAPTCHA not being fully validated (:pr:`6096`)
 
 Improvements
 ^^^^^^^^^^^^
 
-- None so far :(
+- Add placeholders for accompanying persons to the badge/ticket designer (:pr:`6033`)
+
+Bugfixes
+^^^^^^^^
+
+- Fix meeting timetable not showing custom locations when all top-level timetable
+  entries are session blocks inheriting the custom location from its session (:pr:`6014`)
+- Always show exact matches when searching for existing videoconference rooms to attach to an
+  event (:pr:`6022`)
+- Include materials linked to sessions in the material package (:pr:`6024`)
+- Use the correct locale when sending sending email notifications to others in an event
+  (:issue:`5987`, :pr:`6021`)
+- Fix the author/speaker selector (e.g. for abstracts) breaking when submitting the form and
+  getting a validation error (:issue:`6043`, :pr:`6053`)
+- Do not cancel past linked room bookings when deleting an event (:issue:`6032`, :pr:`6051`)
+- Fix contribution list filters being obscured by the action dialog (:pr:`6055`)
+- Fix emailing Paper Peer Reviewing and Editing teams (:pr:`6145`)
+
+Internal Changes
+^^^^^^^^^^^^^^^^
+
+- None so far
+
+
+Version 3.2.8
+-------------
+
+*Released on October 11, 2023*
+
+Security fixes
+^^^^^^^^^^^^^^
+
+- Update `Pillow <https://pypi.org/project/Pillow/>`_ library due to
+  vulnerabilities in libwebp (:cve:`CVE-2023-4863`)
+
+Internationalization
+^^^^^^^^^^^^^^^^^^^^
+
+- New translation: Italian
 
 Bugfixes
 ^^^^^^^^
@@ -67,11 +234,8 @@ Bugfixes
   thanks :user:`bpedersen2`)
 - Fix accessing the conference overview page when the default conference home page is
   set to a custom page (:pr:`5882`)
-
-Internal Changes
-^^^^^^^^^^^^^^^^
-
-- None so far
+- Show percentages for multi-choice survey answers based on number of answers instead of
+  total number of choices selected (:pr:`5930`)
 
 
 Version 3.2.7

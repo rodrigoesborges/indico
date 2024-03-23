@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -88,8 +88,7 @@ class RHManageRegistrationFormsDisplay(RHManageRegFormsBase):
                 continue
             sorted_forms.append(regform)
             del available_forms[form_id]
-        for form_id, regform in available_forms.items():
-            sorted_forms.append(regform)
+        sorted_forms.extend(available_forms.values())
 
         merge_forms = registration_settings.get(self.event, 'merge_registration_forms')
         return WPManageRegistration.render_template('management/regform_display.html', self.event,

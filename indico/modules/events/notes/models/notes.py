@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -18,10 +18,12 @@ from indico.core.db.sqlalchemy.descriptions import RenderMode
 from indico.core.db.sqlalchemy.links import LinkMixin, LinkType
 from indico.core.db.sqlalchemy.searchable import fts_matches, make_fts_index
 from indico.core.db.sqlalchemy.util.models import auto_table_args
+from indico.core.db.sqlalchemy.util.session import no_autoflush
+from indico.modules.events.settings import autolinker_settings
 from indico.util.date_time import now_utc
 from indico.util.decorators import strict_classproperty
 from indico.util.locators import locator_property
-from indico.util.string import render_markdown, text_to_repr
+from indico.util.string import AutoLinkExtension, HTMLLinker, render_markdown, text_to_repr
 
 
 class EventNote(LinkMixin, db.Model):
@@ -233,8 +235,7 @@ class EventNoteRevision(db.Model):
     def __repr__(self):
         render_mode = self.render_mode.name if self.render_mode is not None else None
         source = text_to_repr(self.source, html=True)
-        return '<EventNoteRevision({}, {}, {}, {}): "{}">'.format(self.id, self.note_id, render_mode, self.created_dt,
-                                                                  source)
+        return f'<EventNoteRevision({self.id}, {self.note_id}, {render_mode}, {self.created_dt}): "{source}">'
 
 
 @listens_for(EventNote.current_revision, 'set')
@@ -246,15 +247,19 @@ def _add_current_revision(target, value, *unused):
     target.html = value.html
 
 
+@no_autoflush
 def _render_revision(attr, target, value, *unused):
     source = value if attr == 'source' else target.source
     render_mode = value if attr == 'render_mode' else target.render_mode
     if source is None or render_mode is None:
         return
+
+    autolinker_rules = autolinker_settings.get('rules')
+
     if render_mode == RenderMode.html:
-        target.html = source
+        target.html = HTMLLinker(autolinker_rules).process(source)
     elif render_mode == RenderMode.markdown:
-        target.html = render_markdown(source, extensions=('nl2br',))
+        target.html = render_markdown(source, extensions=('nl2br', AutoLinkExtension(autolinker_rules)))
     else:  # pragma: no cover
         raise ValueError(f'Invalid render mode: {render_mode}')
 

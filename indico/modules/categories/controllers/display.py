@@ -1,11 +1,12 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
 from datetime import date, datetime, time, timedelta
+from enum import Enum, auto
 from functools import partial
 from io import BytesIO
 from itertools import chain, groupby
@@ -16,14 +17,14 @@ import dateutil
 from dateutil.parser import ParserError
 from dateutil.relativedelta import relativedelta
 from flask import flash, jsonify, redirect, request, session
+from marshmallow_enum import EnumField
 from pytz import utc
-from sqlalchemy.orm import joinedload, load_only, subqueryload, undefer, undefer_group
+from sqlalchemy.orm import joinedload, load_only, selectinload, subqueryload, undefer, undefer_group
 from webargs import fields, validate
 from werkzeug.exceptions import BadRequest, Forbidden, NotFound
 
 from indico.core import signals
 from indico.core.db import db
-from indico.core.db.sqlalchemy.colors import ColorTuple
 from indico.core.db.sqlalchemy.util.queries import get_n_matching
 from indico.modules.categories.controllers.base import RHCategoryBase, RHDisplayCategoryBase
 from indico.modules.categories.controllers.util import (get_category_view_params, get_event_query_filter,
@@ -34,17 +35,21 @@ from indico.modules.categories.serialize import (serialize_categories_ical, seri
                                                  serialize_category_chain)
 from indico.modules.categories.util import get_category_stats, get_upcoming_events
 from indico.modules.categories.views import WPCategory, WPCategoryCalendar
+from indico.modules.events.management.settings import global_event_settings
 from indico.modules.events.models.events import Event
 from indico.modules.events.timetable.util import get_category_timetable
 from indico.modules.news.util import get_recent_news
+from indico.modules.rb.models.locations import Location
 from indico.modules.users import User
 from indico.modules.users.models.favorites import favorite_category_table, favorite_event_table
+from indico.util.colors import generate_contrast_colors
 from indico.util.date_time import format_date, format_number, now_utc
 from indico.util.decorators import classproperty
 from indico.util.fs import secure_filename
 from indico.util.i18n import _
 from indico.util.marshmallow import LowercaseString, not_empty
 from indico.util.signals import values_from_signal
+from indico.util.string import crc32
 from indico.web.args import use_kwargs
 from indico.web.flask.templating import get_template_module
 from indico.web.flask.util import send_file, url_for
@@ -52,21 +57,12 @@ from indico.web.rh import RH, allow_signed_url
 from indico.web.util import jsonify_data
 
 
-CALENDAR_COLOR_PALETTE = [
-    ColorTuple('#1F1100', '#ECC495'),
-    ColorTuple('#0F0202', '#B9CBCA'),
-    ColorTuple('#0D1E1F', '#C2ECEF'),
-    ColorTuple('#000000', '#D0C296'),
-    ColorTuple('#202020', '#EFEBC2')
-]
-
-
 def _flat_map(func, list_):
     return chain.from_iterable(map(func, list_))
 
 
 class RHCategoryIcon(RHDisplayCategoryBase):
-    _category_query_options = undefer('icon'),
+    _category_query_options = (undefer('icon'),)
 
     def _check_access(self):
         # Category icons are always public
@@ -81,7 +77,7 @@ class RHCategoryIcon(RHDisplayCategoryBase):
 
 
 class RHCategoryLogo(RHDisplayCategoryBase):
-    _category_query_options = undefer('logo'),
+    _category_query_options = (undefer('logo'),)
 
     def _process(self):
         if not self.category.has_logo:
@@ -267,7 +263,7 @@ class RHDisplayCategoryEventsBase(RHDisplayCategoryBase):
 
 
 class RHDisplayCategory(RHDisplayCategoryEventsBase):
-    """Show the contents of a category (events/subcategories)"""
+    """Show the contents of a category (events/subcategories)."""
 
     def _process(self):
         params = get_category_view_params(self.category, self.now, is_flat=self.is_flat)
@@ -326,9 +322,7 @@ class RHEventList(RHDisplayCategoryEventsBase):
 
 
 class RHShowEventsInCategoryBase(RHDisplayCategoryBase):
-    """
-    Set whether the events in a category are automatically displayed or not.
-    """
+    """Set whether the events in a category are automatically displayed or not."""
 
     session_field = ''
 
@@ -348,17 +342,13 @@ class RHShowEventsInCategoryBase(RHDisplayCategoryBase):
 
 
 class RHShowFutureEventsInCategory(RHShowEventsInCategoryBase):
-    """
-    Set whether the past events in a category are automatically displayed or not.
-    """
+    """Set whether the past events in a category are automatically displayed or not."""
 
     session_field = 'fetch_future_events_in'
 
 
 class RHShowPastEventsInCategory(RHShowEventsInCategoryBase):
-    """
-    Set whether the past events in a category are automatically displayed or not.
-    """
+    """Set whether the past events in a category are automatically displayed or not."""
 
     session_field = 'fetch_past_events_in'
 
@@ -468,9 +458,10 @@ class RHCategoryOverview(RHDisplayCategoryBase):
             days = self._get_calendar_days()
             template = 'display/overview/month.html'
 
-        events_by_day = []
-        for day in days:
-            events_by_day.append((day, self._pop_head_while(lambda x: x.start_dt.date() <= day.date(), events)))
+        events_by_day = [
+            (day, self._pop_head_while(lambda x: x.start_dt.date() <= day.date(), events))  # noqa: B023
+            for day in days
+        ]
 
         # Check whether all weekends are empty
         hide_weekend = (not any(map(itemgetter(1), events_by_day[5::7])) and
@@ -572,9 +563,17 @@ class RHCategoryCalendarView(RHDisplayCategoryBase):
 
 
 class RHCategoryCalendarViewEvents(RHDisplayCategoryBase):
-    def _process_args(self):
+    class GroupBy(Enum):
+        category = auto()
+        location = auto()
+        room = auto()
+        keywords = auto()
+
+    @use_kwargs({'group_by': EnumField(GroupBy, load_default=GroupBy.category)}, location='query')
+    def _process_args(self, group_by):
         RHDisplayCategoryBase._process_args(self)
         tz = self.category.display_tzinfo
+        self.group_by = group_by
         try:
             self.start_dt = tz.localize(dateutil.parser.parse(request.args['start'])).astimezone(utc)
             self.end_dt = tz.localize(dateutil.parser.parse(request.args['end'])).astimezone(utc)
@@ -586,8 +585,14 @@ class RHCategoryCalendarViewEvents(RHDisplayCategoryBase):
                  .filter(Event.starts_between(self.start_dt, self.end_dt),
                          Event.is_visible_in(self.category.id),
                          ~Event.is_deleted)
-                 .options(load_only('id', 'title', 'start_dt', 'end_dt', 'category_id')))
-        events = self._get_event_data(query)
+                 .options(undefer(Event.detailed_category_chain),
+                          selectinload('own_room'),
+                          load_only('id', 'title', 'start_dt', 'end_dt', 'category_id', 'own_venue_id', 'own_room_id',
+                                    'keywords')))
+        events, categories, rooms, keywords, allowed_keywords = self._get_event_data(query)
+        raw_locations = Location.query.options(load_only('id', 'name')).all()
+        allow_keywords = bool(allowed_keywords)
+        locations = [{'title': loc.name, 'id': loc.id} for loc in raw_locations]
         ongoing_events = (Event.query
                           .filter(Event.is_visible_in(self.category.id),
                                   ~Event.is_deleted,
@@ -596,22 +601,79 @@ class RHCategoryCalendarViewEvents(RHDisplayCategoryBase):
                           .options(load_only('id', 'title', 'start_dt', 'end_dt', 'timezone'))
                           .order_by(Event.title)
                           .all())
-        return jsonify_data(flash=False, events=events, ongoing_event_count=len(ongoing_events),
+        return jsonify_data(flash=False, events=events, categories=categories, locations=locations, rooms=rooms,
+                            keywords=keywords, allow_keywords=allow_keywords,
+                            group_by=self.group_by.name,
+                            ongoing_event_count=len(ongoing_events),
                             ongoing_events_html=self._render_ongoing_events(ongoing_events))
 
+    def _find_nearest_category(self, category_chain):
+        for index, category_data in enumerate(category_chain):
+            if category_data['id'] == self.category.id:
+                if index == len(category_chain) - 1:
+                    return category_data
+                else:
+                    return category_chain[index + 1]
+        # this should never happen
+        raise Exception(f'Category {self.category.id} not found in category chain')
+
     def _get_event_data(self, event_query):
+        def calculate_keyword_id(kw):
+            # we add 3 in order not to collide with special items with ids 0 and 1
+            return crc32(kw) + 3
+
         data = []
+        categories = {}
+        rooms = {}
+        keywords = {}
+        allowed_keywords = global_event_settings.get('allowed_keywords')
+        allowed_keywords_set = set(allowed_keywords)
         tz = self.category.display_tzinfo
         for event in event_query:
-            category_id = event.category_id
+            valid_keywords = [keyword for keyword in event.keywords if keyword in allowed_keywords_set]
+            for keyword in valid_keywords:
+                keyword_id = calculate_keyword_id(keyword)
+                if keyword_id not in keywords:
+                    keywords.setdefault(keyword_id, {'id': keyword_id, 'title': keyword,
+                                                     'color': f'#{generate_contrast_colors(keyword_id).background}'})
+            category_data = self._find_nearest_category(event.detailed_category_chain)
+            category_id = category_data['id']
+            category_data['url'] = url_for('categories.calendar', category_id=category_id)
+            room = event.room
+            if room and room.id not in rooms:
+                rooms[room.id] = {'id': room.id,
+                                  'title': room.full_name,
+                                  'venueId': room.location_id}
             event_data = {'title': event.title,
                           'start': event.start_dt.astimezone(tz).replace(tzinfo=None).isoformat(),
                           'end': event.end_dt.astimezone(tz).replace(tzinfo=None).isoformat(),
-                          'url': event.url}
-            colors = CALENDAR_COLOR_PALETTE[category_id % len(CALENDAR_COLOR_PALETTE)]
-            event_data.update({'textColor': '#' + colors.text, 'color': '#' + colors.background})
+                          'url': event.url,
+                          'categoryId': category_id,
+                          'venueId': event.own_venue_id,
+                          'keywords': event.keywords,
+                          'validKeywords': valid_keywords,
+                          'roomId': room.id if room else None}
+            if self.group_by == self.GroupBy.category:
+                colors = generate_contrast_colors(category_id)
+            elif self.group_by == self.GroupBy.location:
+                colors = generate_contrast_colors(event.own_venue_id or 0)
+            elif self.group_by == self.GroupBy.room:
+                colors = generate_contrast_colors(room.id if room else 0)
+            else:
+                # by keywords
+                if not valid_keywords:
+                    keyword_id = 0
+                elif len(valid_keywords) > 1:
+                    keyword_id = 1
+                else:
+                    # only one keyword
+                    keyword_id = calculate_keyword_id(valid_keywords[0])
+                event_data['keywordId'] = keyword_id
+                colors = generate_contrast_colors(keyword_id)
+            event_data.update({'textColor': f'#{colors.text}', 'color': f'#{colors.background}'})
             data.append(event_data)
-        return data
+            categories[category_id] = category_data
+        return data, list(categories.values()), list(rooms.values()), list(keywords.values()), allowed_keywords
 
     def _render_ongoing_events(self, ongoing_events):
         template = get_template_module('categories/display/_calendar_ongoing_events.html')

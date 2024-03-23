@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -26,10 +26,11 @@ from indico.modules.auth.models.registration_requests import RegistrationRequest
 from indico.modules.auth.util import (impersonate_user, load_identity_info, register_user, undo_impersonate_user,
                                       url_for_logout)
 from indico.modules.auth.views import WPAuth, WPAuthUser, WPSignup
+from indico.modules.legal import legal_settings
 from indico.modules.users import User, user_management_settings
 from indico.modules.users.controllers import RHUserBase
 from indico.modules.users.models.affiliations import Affiliation
-from indico.util.date_time import format_human_timedelta
+from indico.util.date_time import format_human_timedelta, now_utc
 from indico.util.i18n import _, force_locale
 from indico.util.marshmallow import LowercaseString, ModelField, not_empty
 from indico.util.passwords import validate_secure_password
@@ -62,11 +63,12 @@ class RHLogin(RH):
     # CSRF check anyway disabling the global check is perfectly fine.
     CSRF_ENABLED = False
 
-    def _process(self):
+    @use_kwargs({'force': fields.Bool(load_default=False)}, location='query')
+    def _process(self, force):
         login_reason = session.pop('login_reason', None)
 
         # User is already logged in
-        if session.user is not None:
+        if session.user is not None and not force:
             multipass.set_next_url()
             return multipass.redirect_success()
 
@@ -111,7 +113,7 @@ class RHLogin(RH):
         providers = list(multipass.auth_providers.values())
         retry_in = login_rate_limiter.get_reset_delay() if rate_limit_exceeded else None
         return render_template('auth/login_page.html', form=form, providers=providers, active_provider=active_provider,
-                               login_reason=login_reason, retry_in=retry_in)
+                               login_reason=login_reason, retry_in=retry_in, force=(force or None))
 
 
 class RHLoginForm(RH):
@@ -306,6 +308,8 @@ class RHRegister(RH):
         user_data = {k: v for k, v in data.items()
                      if k in {'first_name', 'last_name', 'affiliation', 'affiliation_link', 'address', 'phone'}}
         user_data.update(handler.get_extra_user_data(data))
+        if data.pop('accept_terms', False):
+            user_data['accepted_terms_dt'] = now_utc()
         identity_data = handler.get_identity_data(data)
         settings = {
             'timezone': config.DEFAULT_TIMEZONE if session.timezone == 'LOCAL' else session.timezone,
@@ -319,6 +323,8 @@ class RHRegister(RH):
         email = registration_data['email']
         req = RegistrationRequest.query.filter_by(email=email).first() or RegistrationRequest(email=email)
         req.comment = data['comment']
+        if accepted_terms_dt := registration_data['user_data'].pop('accepted_terms_dt', None):
+            registration_data['user_data']['accepted_terms_dt'] = accepted_terms_dt.isoformat()
         if aff_link := registration_data['user_data'].pop('affiliation_link', None):
             db.session.add(aff_link)  # in case it's newly created
             db.session.flush()
@@ -389,7 +395,7 @@ class RHRemoveAccount(RHUserBase):
         RHUserBase._process_args(self)
         self.identity = Identity.get_or_404(request.view_args['identity'])
         if self.identity.user != self.user:
-            raise NotFound()
+            raise NotFound
 
     def _process(self):
         if session.get('login_identity') == self.identity.id:
@@ -401,8 +407,8 @@ class RHRemoveAccount(RHUserBase):
             provider_title = multipass.identity_providers[self.identity.provider].title
         except KeyError:
             provider_title = self.identity.provider.title()
-        flash(_('{provider} ({identifier}) successfully removed from your accounts'
-              .format(provider=provider_title, identifier=self.identity.identifier)), 'success')
+        flash(_('{provider} ({identifier}) successfully removed from your accounts')
+              .format(provider=provider_title, identifier=self.identity.identifier), 'success')
         return redirect(url_for('.accounts'))
 
 
@@ -433,7 +439,20 @@ class RegistrationHandler:
         return data
 
     def get_signup_config(self):
-        raise NotImplementedError
+        effective_date = legal_settings.get('terms_effective_date')
+
+        return {
+            'cancelURL': url_for_logout(),
+            'moderated': self.moderate_registrations,
+            'hasPredefinedAffiliations': Affiliation.query.has_rows(),
+            'mandatoryFields': user_management_settings.get('mandatory_fields_account_request'),
+            'tosUrl': legal_settings.get('tos_url'),
+            'tos': legal_settings.get('tos'),
+            'privacyPolicyUrl': legal_settings.get('privacy_policy_url'),
+            'privacyPolicy': legal_settings.get('privacy_policy'),
+            'termsRequireAccept': legal_settings.get('terms_require_accept'),
+            'termsEffectiveDate': effective_date.isoformat() if effective_date else None,
+        }
 
     def create_schema(self):
         emails = self.get_all_emails()
@@ -453,6 +472,10 @@ class RegistrationHandler:
                 affiliation = fields.String(load_default='')
             phone = fields.String(load_default='')
             affiliation_link = ModelField(Affiliation, data_key='affiliation_id', load_default=None)
+
+            if legal_settings.get('terms_require_accept'):
+                accept_terms = fields.Bool(required=True, validate=not_empty)
+
             if self.moderate_registrations:
                 if 'comment' in mandatory_fields:
                     comment = fields.String(required=True, validate=not_empty)
@@ -522,6 +545,8 @@ class MultipassRegistrationHandler(RegistrationHandler):
         session.modified = True
 
     def get_signup_config(self):
+        base_signup_config = super().get_signup_config()
+
         emails = sorted(set(self.identity_info['data'].getlist('email')))
         initial_values = {
             'email': emails[0] if emails else '',
@@ -530,7 +555,6 @@ class MultipassRegistrationHandler(RegistrationHandler):
         }
         affiliation_meta = None
         pending_data = self.get_pending_initial_data(emails)
-        mandatory_fields = user_management_settings.get('mandatory_fields_account_request')
         if self.from_sync_provider:
             synced_fields = set(multipass.synced_fields)
             synced_values = {k: v or '' for k, v in self.identity_info['data'].items() if k in synced_fields}
@@ -547,20 +571,19 @@ class MultipassRegistrationHandler(RegistrationHandler):
             locked_fields = list(multipass.locked_fields - required_empty_fields)
         else:
             synced_values = {}
-            initial_values.update(pending_data)
+            allowed_fields = {'first_name', 'last_name', 'affiliation', 'phone', 'address'}
+            multipass_data = {k: v for k, v in self.identity_info['data'].items() if k in allowed_fields and v}
+            initial_values.update(pending_data or multipass_data)
             locked_fields = []
 
         return {
-            'cancelURL': url_for_logout(),
-            'moderated': self.moderate_registrations,
+            **base_signup_config,
             'initialValues': initial_values,
-            'hasPredefinedAffiliations': Affiliation.query.has_rows(),
             'showAccountForm': False,
             'syncedValues': synced_values,
             'emails': emails,
             'affiliationMeta': affiliation_meta,
             'hasPendingUser': bool(pending_data),
-            'mandatoryFields': mandatory_fields,
             'lockedFields': locked_fields,
             'lockedFieldMessage': multipass.locked_field_message,
         }
@@ -655,21 +678,18 @@ class LocalRegistrationHandler(RegistrationHandler):
             session['register_next_url'] = next_url
 
     def get_signup_config(self):
+        base_signup_config = super().get_signup_config()
         email = session['register_verified_email']
         initial_values = {'email': email, 'affiliation_data': {'id': None, 'text': ''}}
         pending_data = self.get_pending_initial_data([email])
         initial_values.update(pending_data)
-        mandatory_fields = user_management_settings.get('mandatory_fields_account_request')
         return {
-            'cancelURL': url_for_logout(),
-            'moderated': self.moderate_registrations,
+            **base_signup_config,
             'initialValues': initial_values,
-            'hasPredefinedAffiliations': Affiliation.query.has_rows(),
             'showAccountForm': True,
             'syncedValues': {},
             'emails': [email],
             'hasPendingUser': bool(pending_data),
-            'mandatoryFields': mandatory_fields,
         }
 
     def create_schema(self):

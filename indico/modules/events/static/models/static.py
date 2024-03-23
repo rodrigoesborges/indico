@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -95,7 +95,7 @@ class StaticSite(StoredFileMixin, db.Model):
         path_segments = ['event', strict_str(self.event.id), 'static']
         self.assign_id()
         filename = f'{self.id}-{self.filename}'
-        path = posixpath.join(*(path_segments + [filename]))
+        path = posixpath.join(*path_segments, filename)
         return config.STATIC_SITE_STORAGE, path
 
     def __repr__(self):

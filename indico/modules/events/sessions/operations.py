@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -19,9 +19,7 @@ from indico.util.i18n import orig_string
 
 
 def create_session(event, data):
-    """
-    Create a new session with the information passed in the `data` argument.
-    """
+    """Create a new session with the information passed in the `data` argument."""
     event_session = Session(event=event)
     event_session.populate_from_dict(data)
     db.session.flush()
@@ -37,8 +35,7 @@ def create_session_block(session_, data):
     block.populate_from_dict(data)
     db.session.flush()
     session_.event.log(EventLogRealm.management, LogKind.positive, 'Sessions',
-                       'Session block "{}" for session "{}" has been created'
-                       .format(block.title, session_.title), session.user,
+                       f'Session block "{block.title}" for session "{session_.title}" has been created', session.user,
                        meta={'session_block_id': block.id})
     logger.info('Session block %s created by %s', block, session.user)
     return block

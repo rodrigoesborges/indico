@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -22,6 +22,7 @@ from indico.util.string import truncate
 logger = Logger.get('emails')
 
 
+# XXX: Please don't use this in new code. Call `send_email()` directly.
 def email_sender(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):

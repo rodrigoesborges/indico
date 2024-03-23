@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -39,6 +39,7 @@ class RHPaymentAdminSettings(RHAdminBase):
 
 class RHPaymentAdminPluginSettings(RHPluginDetails):
     """Payment plugin settings in server admin area."""
+
     back_button_endpoint = 'payment.admin_settings'
 
 
@@ -50,6 +51,7 @@ class RHPaymentManagementBase(RHManageEventBase):
 
 class RHPaymentBase(RHRegistrationFormRegistrationBase):
     """Base RH for non-management payment pages."""
+
     EVENT_FEATURE = 'payment'
 
 
@@ -147,8 +149,7 @@ class RHPaymentForm(RHPaymentBase):
         except KeyError:
             raise NotFound
         if not self.plugin.supports_currency(self.registration.currency):
-            raise BadRequest('Payment method incompatible with registration currency {}'
-                             .format(self.registration.currency))
+            raise BadRequest(f'Payment method incompatible with registration currency {self.registration.currency}')
 
     def _process(self):
         with self.plugin.plugin_context():

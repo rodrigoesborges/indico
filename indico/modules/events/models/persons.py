@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -317,7 +317,7 @@ class EventPerson(PersonMixin, db.Model):
     @no_autoflush
     def merge_person_info(self, other):
         from indico.modules.events.contributions.models.persons import AuthorType
-        for column_name in {'_title', 'affiliation', 'address', 'phone', 'first_name', 'last_name'}:
+        for column_name in ('_title', 'affiliation', 'address', 'phone', 'first_name', 'last_name'):
             value = getattr(self, column_name) or getattr(other, column_name)
             setattr(self, column_name, value)
 

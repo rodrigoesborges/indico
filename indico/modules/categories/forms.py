@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -10,30 +10,39 @@ from functools import partial
 from flask import request
 from wtforms.fields import BooleanField, HiddenField, IntegerField, SelectField, StringField
 from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, ValidationError
+from wtforms.widgets import TextArea
 
+from indico.core.config import config
 from indico.core.permissions import FULL_ACCESS_PERMISSION, READ_ACCESS_PERMISSION
-from indico.modules.categories.models.categories import Category, EventCreationMode, EventMessageMode
+from indico.modules.categories.models.categories import (Category, EventCreationMode, EventMessageMode,
+                                                         InheritableConfigMode)
 from indico.modules.categories.models.roles import CategoryRole
 from indico.modules.categories.util import get_image_data, get_visibility_options
 from indico.modules.events import Event
 from indico.modules.events.fields import IndicoThemeSelectField
 from indico.modules.events.models.events import EventType
+from indico.modules.events.registration.google_wallet import GoogleCredentialValidationResult, GoogleWalletManager
 from indico.modules.networks import IPNetworkGroup
 from indico.util.i18n import _
 from indico.util.user import principal_from_identifier
-from indico.web.forms.base import IndicoForm
+from indico.web.forms.base import IndicoForm, generated_data
 from indico.web.forms.colors import get_role_colors
 from indico.web.forms.fields import (EditableFileField, EmailListField, HiddenFieldList, IndicoEnumSelectField,
                                      IndicoMarkdownField, IndicoProtectionField, IndicoSinglePalettePickerField,
                                      IndicoTimezoneSelectField, MultipleItemsField)
 from indico.web.forms.fields.principals import PermissionsField
+from indico.web.forms.fields.simple import JSONField
+from indico.web.forms.validators import HiddenUnless
 from indico.web.forms.widgets import HiddenCheckbox, SwitchWidget
 
 
 class CategorySettingsForm(IndicoForm):
     BASIC_FIELDS = ('title', 'description', 'timezone', 'lecture_theme', 'meeting_theme', 'visibility',
-                    'suggestions_disabled', 'is_flat_view_enabled', 'event_creation_notification_emails',
-                    'notify_managers')
+                    'suggestions_disabled', 'is_flat_view_enabled', 'show_future_months',
+                    'event_creation_notification_emails', 'notify_managers')
+    GOOGLE_WALLET_FIELDS = ('google_wallet_mode', 'google_wallet_credentials', 'google_wallet_issuer_name',
+                            'google_wallet_issuer_id')
+    GOOGLE_WALLET_JSON_FIELDS = ('google_wallet_credentials', 'google_wallet_issuer_name', 'google_wallet_issuer_id')
     EVENT_HEADER_FIELDS = ('event_message_mode', 'event_message')
 
     title = StringField(_('Title'), [DataRequired()])
@@ -52,6 +61,11 @@ class CategorySettingsForm(IndicoForm):
                                         description=_('Allow users to view all the events descending from this '
                                                       'category in one single page. This is not recommended on large '
                                                       'categories with thousands of events.'))
+    show_future_months = IntegerField(_('Future months threshold'), [NumberRange(min=0)],
+                                      description=_('Events past the threshold will be hidden by default to avoid '
+                                                    'clutter, the user can click to expand them. If no events are '
+                                                    'found within this threshold, it is extended to show the first '
+                                                    'month with events.'))
     event_message_mode = IndicoEnumSelectField(_('Message Type'), enum=EventMessageMode,
                                                default=EventMessageMode.disabled,
                                                description=_('This message will show up at the top of every event page '
@@ -65,6 +79,97 @@ class CategorySettingsForm(IndicoForm):
                                                                       'every time a new event is created inside the '
                                                                       'category or one of its subcategories. '
                                                                       'One email address per line.'))
+    google_wallet_mode = IndicoEnumSelectField(_('Configuration'), enum=InheritableConfigMode,
+                                               description=_('The Google Wallet configuration is, by default, '
+                                                             'inherited from the parent category. You can also '
+                                                             'explicitly disable it or provide your own configuration '
+                                                             'instead.'))
+    google_wallet_credentials = JSONField(_('Google Credentials'),
+                                          [HiddenUnless('google_wallet_mode', InheritableConfigMode.enabled,
+                                                        preserve_data=True),
+                                           DataRequired()],
+                                          empty_if_null=True,
+                                          widget=TextArea(),
+                                          description=_('JSON key credentials for the Google Service Account'))
+    google_wallet_issuer_name = StringField(_('Issuer Name'),
+                                            [HiddenUnless('google_wallet_mode', InheritableConfigMode.enabled,
+                                                          preserve_data=True),
+                                             DataRequired()],
+                                            description=_('Issuer name that will appear in the Google Wallet ticket '
+                                                          'top header. Google recommends a maximum length of 20 chars '
+                                                          'to ensure readability on all devices.'))
+    google_wallet_issuer_id = StringField(_('Issuer ID'),
+                                          [HiddenUnless('google_wallet_mode', InheritableConfigMode.enabled,
+                                                        preserve_data=True),
+                                           DataRequired()],
+                                          description=_('Issuer ID assigned in the "Google Pay & Wallet" console. '
+                                                        'The same Issuer ID must never be used on more than one '
+                                                        'Indico server. Changing it will also break updates to '
+                                                        'any existing tickets.'))
+
+    def __init__(self, *args, category, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.category = category
+        if not config.ENABLE_GOOGLE_WALLET:
+            for field in list(self):
+                if field.name.startswith('google_wallet_'):
+                    delattr(self, field.name)
+        elif category.parent:
+            parent_configured = category.parent.effective_google_wallet_config is not None
+            self.google_wallet_mode.titles = InheritableConfigMode.get_form_field_titles(parent_configured)
+        else:
+            self.google_wallet_mode.skip = {InheritableConfigMode.inheriting}
+
+    def validate(self, extra_validators=None):
+        form_valid = super().validate(extra_validators=extra_validators)
+
+        if not config.ENABLE_GOOGLE_WALLET:
+            return form_valid
+
+        enabled = self.google_wallet_mode.data == InheritableConfigMode.enabled
+        credentials = self.google_wallet_credentials.data
+        issuer_id = self.google_wallet_issuer_id.data
+
+        if (
+            credentials and
+            enabled and (
+                self.category.google_wallet_settings.get('google_wallet_credentials') != credentials or
+                self.category.google_wallet_settings.get('google_wallet_issuer_id') != issuer_id
+            )
+        ):
+            res = GoogleWalletManager.verify_credentials(credentials, issuer_id)
+            if res == GoogleCredentialValidationResult.invalid:
+                self.google_wallet_credentials.errors.append(
+                    _('The credentials could not be loaded.')
+                )
+                return False
+            elif res == GoogleCredentialValidationResult.refused:
+                self.google_wallet_credentials.errors.append(
+                    _('The credentials are invalid or have no access to the Google Wallet API.')
+                )
+                return False
+            elif res == GoogleCredentialValidationResult.failed:
+                self.google_wallet_credentials.errors.append(
+                    _('There was an error validating your credentials. Contact your Indico administrator for details.')
+                )
+                return False
+            elif res == GoogleCredentialValidationResult.bad_issuer:
+                self.google_wallet_issuer_id.errors.append(
+                    _('The Issuer ID is invalid or not linked to your credentials.')
+                )
+                return False
+
+        return form_valid
+
+    @generated_data
+    def google_wallet_settings(self):
+        if not config.ENABLE_GOOGLE_WALLET:
+            return self.category.google_wallet_settings
+        return {k: getattr(self, k).data for k in self.GOOGLE_WALLET_JSON_FIELDS}
+
+    @property
+    def data(self):
+        return {k: v for k, v in super().data.items() if k not in self.GOOGLE_WALLET_JSON_FIELDS}
 
 
 class CategoryIconForm(IndicoForm):
@@ -89,7 +194,8 @@ class CategoryProtectionForm(IndicoForm):
     own_no_access_contact = StringField(_('No access contact'),
                                         description=_('Contact information shown when someone lacks access to the '
                                                       'category'))
-    visibility = SelectField(_('Event visibility'), [Optional()], coerce=lambda x: None if x == '' else int(x),
+    visibility = SelectField(_('Event visibility'),
+                             [Optional()], coerce=lambda x: None if x == '' else int(x),  # noqa: PLC1901
                              description=_('''From which point in the category tree contents will be visible from '''
                                            '''(number of categories upwards). Applies to "Today's events" and '''
                                            '''Calendar. If the category is moved, this number will be preserved.'''))

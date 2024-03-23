@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -22,10 +22,6 @@
     font-size: 0.8em;
 
     .text {
-      @include ellipsis();
-
-      display: inline-block;
-      max-width: 10em;
       vertical-align: bottom;
     }
   }
@@ -55,7 +51,6 @@
 .event-message {
   margin: 20px auto 5px auto;
   width: 1000px !important;
-  box-sizing: border-box;
   line-height: initial;
 }
 

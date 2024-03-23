@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -11,18 +11,20 @@ import typing as t
 from datetime import datetime, time, timedelta
 from uuid import UUID
 
+import yaml
 from dateutil import parser, relativedelta
-from marshmallow import ValidationError, fields
+from marshmallow import Schema, ValidationError, fields
 from marshmallow.utils import from_iso_datetime
 from marshmallow_enum import EnumField
 from pytz import timezone
+from speaklater import _LazyString
 from sqlalchemy import inspect
 
 from indico.core.config import config
 from indico.core.permissions import get_unified_permissions
 from indico.util.date_time import now_utc
 from indico.util.i18n import _
-from indico.util.string import get_format_placeholders
+from indico.util.string import get_format_placeholders, has_relative_links
 from indico.util.user import principal_from_identifier
 
 
@@ -51,9 +53,14 @@ def not_empty(value):
 
     Any falsy value is considered empty.
     """
-
     if not value:
         raise ValidationError(_('This field cannot be empty.'))
+
+
+def no_relative_urls(value):
+    """Validator that checks links/images use absolute URLs."""
+    if value and has_relative_links(value):
+        raise ValidationError(_('Links and images may not use relative URLs.'))
 
 
 def validate_placeholders(format_string, valid_placeholders, required_placeholders=None):
@@ -75,7 +82,6 @@ def validate_placeholders(format_string, valid_placeholders, required_placeholde
 
 def file_extension(*exts):
     """Validator which checks the file extension."""
-
     exts = frozenset('.' + ext.lstrip('.') for ext in exts)
 
     def validate(file):
@@ -165,7 +171,25 @@ class RelativeDayDateTime(fields.Date):
             return timezone(config.DEFAULT_TIMEZONE).localize(datetime.combine(date_value, time(0, 0, 0)))
 
 
-class ModelField(fields.Field):
+class I18nAwareField(fields.Field):
+    """Marshmallow field which can use lazy-string error messages with formatting."""
+
+    def make_error(self, key: str, **kwargs) -> ValidationError:
+        try:
+            msg = self.error_messages[key]
+        except KeyError as error:
+            class_name = self.__class__.__name__
+            message = (
+                f'ValidationError raised by `{class_name}`, but error key `{key}` does '
+                'not exist in the `error_messages` dictionary.'
+            )
+            raise AssertionError(message) from error
+        if isinstance(msg, (str, bytes, _LazyString)):
+            msg = msg.format(**kwargs)
+        return ValidationError(msg)
+
+
+class ModelField(I18nAwareField):
     """Marshmallow field for a single database object.
 
     This serializes an SQLAlchemy object to its identifier (usually the PK),
@@ -507,3 +531,41 @@ class SortedList(fields.List):
             return None
         value = sorted(value, key=self.sort_key)
         return super()._serialize(value, attr, obj, **kwargs)
+
+
+class YAML(I18nAwareField):
+    """Marshmallow field for well-formed YAML data.
+
+    :param schema: A marshmallow schema to validate against
+    :param keep_text: Whether to transform the YAML to a Python object
+                      (and vice versa) or keep it as a YAML string.
+    """
+
+    default_error_messages = {
+        'invalid_type': _('Data must be a string'),
+        'invalid_yaml': _('YAML syntax is invalid'),
+        'invalid_toplevel_type': _('The top-level YAML entity must be a mapping'),
+        'invalid_metadata': _('The metadata contained within the YAML code is invalid: {error}')
+    }
+
+    def __init__(self, schema: Schema, *, keep_text: bool = False, **kwargs):
+        self.schema = schema
+        self.keep_text = keep_text
+        super().__init__(**kwargs)
+
+    def _serialize(self, value, attr, obj, **kwargs):
+        return value if self.keep_text else yaml.safe_dump(value)
+
+    def _deserialize(self, value, attr, data, **kwargs):
+        if not isinstance(value, str):
+            raise self.make_error('invalid_type')
+        try:
+            # we allow empty yaml data (the schema can deal with it)
+            data = yaml.safe_load(value if value.strip() else '{}')
+            if not isinstance(data, dict):
+                raise self.make_error('invalid_toplevel_type')
+            if error := self.schema().validate(data):
+                raise self.make_error('invalid_metadata', error=error)
+            return value if self.keep_text else data
+        except yaml.YAMLError:
+            raise self.make_error('invalid_yaml')

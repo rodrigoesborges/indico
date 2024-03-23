@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -74,8 +74,27 @@ function SearchTypeMenuItem({index, active, title, total, loading, onClick}) {
   } else if (total !== -1) {
     indicator = ` (${total})`;
   }
+
+  let accessibleLabel = title;
+  if (loading) {
+    accessibleLabel = Translate.string('{title} (loading results)', {title});
+  } else if (!total) {
+    accessibleLabel = Translate.string('{title} (no results)', {title});
+  }
+
   return (
-    <Menu.Item index={index} active={active} onClick={onClick} disabled={loading || !total}>
+    <Menu.Item
+      as="button"
+      role="tab"
+      aria-controls="search-results"
+      aria-selected={active}
+      aria-disabled={loading || !total}
+      aria-label={accessibleLabel}
+      index={index}
+      active={active}
+      onClick={onClick}
+      disabled={loading || !total}
+    >
       {title}
       {indicator}
     </Menu.Item>
@@ -303,6 +322,7 @@ export default function SearchApp({category, eventId, isAdmin}) {
           <div styleName="admin-search-container">
             <Label content={Translate.string('ADMIN')} size="small" color="red" />
             <Checkbox
+              id="checkbox-admin-search"
               label={Translate.string('Skip access checks')}
               checked={adminOverrideEnabled}
               onChange={(__, {checked}) => {
@@ -312,7 +332,7 @@ export default function SearchApp({category, eventId, isAdmin}) {
             />
           </div>
         )}
-        <Menu pointing secondary styleName="menu">
+        <Menu role="tablist" pointing secondary styleName="menu">
           {searchMap.map(([label, _results], idx) => (
             <SearchTypeMenuItem
               key={label}
@@ -330,9 +350,11 @@ export default function SearchApp({category, eventId, isAdmin}) {
           sortOptions={options?.sortOptions || []}
           onSortChange={value => handleQuery(value, 'sort')}
         />
-        {!isAnyLoading && (
-          <ResultHeader query={q} hasResults={!!results.total} categoryTitle={category?.title} />
-        )}
+        <div aria-live="polite">
+          {!isAnyLoading && (
+            <ResultHeader query={q} hasResults={!!results.total} categoryTitle={category?.title} />
+          )}
+        </div>
         {q && (results.total !== 0 || isAnyLoading) && (
           <ResultList
             component={Component}

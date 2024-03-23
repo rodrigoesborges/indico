@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -46,12 +46,10 @@ class RegistrationFormItemType(IndicoIntEnum):
 
 # We are not using a RichIntEnum since one of the instances is named "title".
 class PersonalDataType(IndicoIntEnum):
-    """
-    Description of the personal data items that exist on every registration form.
-    """
+    """Description of the personal data items that exist on every registration form."""
 
     __titles__ = [None, 'Email Address', 'First Name', 'Last Name', 'Affiliation', 'Title', 'Address',
-                  'Phone Number', 'Country', 'Position']
+                  'Phone Number', 'Country', 'Position', 'Picture']
     email = 1
     first_name = 2
     last_name = 3
@@ -61,6 +59,7 @@ class PersonalDataType(IndicoIntEnum):
     phone = 7
     country = 8
     position = 9
+    picture = 10
 
     def get_title(self):
         return self.__titles__[self]
@@ -129,6 +128,12 @@ class PersonalDataType(IndicoIntEnum):
                                 for t in UserTitle if t]
                 }
             }),
+            (cls.picture, {
+                'title': cls.picture.get_title(),
+                'input_type': 'picture',
+                'is_enabled': False,
+                'position': 1005
+            }),
         ]
 
     @property
@@ -160,21 +165,18 @@ class RegistrationFormItem(db.Model):
         db.CheckConstraint('(type IN ({t.section}, {t.section_pd})) = (parent_id IS NULL)'
                            .format(t=RegistrationFormItemType),
                            name='top_level_sections'),
-        db.CheckConstraint('(type != {type}) = (personal_data_type IS NULL)'
-                           .format(type=RegistrationFormItemType.field_pd),
+        db.CheckConstraint(f'(type != {RegistrationFormItemType.field_pd}) = (personal_data_type IS NULL)',
                            name='pd_field_type'),
         db.CheckConstraint('NOT is_deleted OR (type NOT IN ({t.section_pd}, {t.field_pd}))'
                            .format(t=RegistrationFormItemType),
                            name='pd_not_deleted'),
         db.CheckConstraint(f'is_enabled OR type != {RegistrationFormItemType.section_pd}',
                            name='pd_section_enabled'),
-        db.CheckConstraint('is_enabled OR type != {type} OR personal_data_type NOT IN '
-                           '({pt.email}, {pt.first_name}, {pt.last_name})'
-                           .format(type=RegistrationFormItemType.field_pd, pt=PersonalDataType),
+        db.CheckConstraint(f'is_enabled OR type != {RegistrationFormItemType.field_pd} OR personal_data_type NOT IN '
+                           f'({PersonalDataType.email}, {PersonalDataType.first_name}, {PersonalDataType.last_name})',
                            name='pd_field_enabled'),
-        db.CheckConstraint('is_required OR type != {type} OR personal_data_type NOT IN '
-                           '({pt.email}, {pt.first_name}, {pt.last_name})'
-                           .format(type=RegistrationFormItemType.field_pd, pt=PersonalDataType),
+        db.CheckConstraint(f'is_required OR type != {RegistrationFormItemType.field_pd} OR personal_data_type NOT IN '
+                           f'({PersonalDataType.email}, {PersonalDataType.first_name}, {PersonalDataType.last_name})',
                            name='pd_field_required'),
         db.CheckConstraint('current_data_id IS NULL OR type IN ({t.field}, {t.field_pd})'
                            .format(t=RegistrationFormItemType),
@@ -336,8 +338,8 @@ class RegistrationFormItem(db.Model):
 
     @property
     def view_data(self):
-        """Return object with data that Angular can understand."""
-        return dict(id=self.id, description=self.description, position=self.position)
+        """Return object with data that the frontend can understand."""
+        return {'id': self.id, 'description': self.description, 'position': self.position}
 
     @property
     def is_active(self):
@@ -379,7 +381,7 @@ class RegistrationFormItem(db.Model):
                    .filter(~sections.is_deleted)
                    .filter(sections.is_enabled)
                    .exists())
-        return cls.is_enabled & ~cls.is_deleted & ((cls.parent_id == None) | query)  # noqa
+        return cls.is_enabled & ~cls.is_deleted & (cls.parent_id.is_(None) | query)
 
     def get_locked_reason(self, registration):
         """Get the reason for the field being locked."""
@@ -420,12 +422,11 @@ class RegistrationFormSection(RegistrationFormItem):
 
     @property
     def own_data(self):
-        field_data = dict(super().view_data,
-                          enabled=self.is_enabled,
-                          title=self.title,
-                          is_manager_only=self.is_manager_only,
-                          is_personal_data=False)
-        return field_data
+        return dict(super().view_data,
+                    enabled=self.is_enabled,
+                    title=self.title,
+                    is_manager_only=self.is_manager_only,
+                    is_personal_data=False)
 
     @property
     def view_data(self):

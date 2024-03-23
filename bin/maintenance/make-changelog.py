@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -9,6 +9,7 @@
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 import click
 from packaging.version import Version
@@ -23,17 +24,22 @@ CHANGELOG_STUB = '''
 Improvements
 ^^^^^^^^^^^^
 
-- None so far :(
+- Nothing so far :(
 
 Bugfixes
 ^^^^^^^^
 
-- None so far :)
+- Nothing so far :)
+
+Accessibility
+^^^^^^^^^^^^^
+
+- Nothing so far
 
 Internal Changes
 ^^^^^^^^^^^^^^^^
 
-- None so far
+- Nothing so far
 
 
 '''.lstrip()
@@ -65,6 +71,11 @@ Bugfixes
 
 - Nothing so far
 
+Accessibility
+^^^^^^^^^^^^^
+
+- Nothing so far
+
 Internal Changes
 ^^^^^^^^^^^^^^^^
 
@@ -92,13 +103,13 @@ def _git_diff(file):
 
 def _git_commit(message, files):
     step("Committing '{}'", message)
-    subprocess.check_call(['git', 'add'] + files)
+    subprocess.check_call(['git', 'add', *files])
     subprocess.check_call(['git', 'commit', '--no-verify', '--message', message])
 
 
 def _create_changelog_stub(version):
-    with open('CHANGES.rst') as f:
-        content = f.read()
+    changes_rst = Path('CHANGES.rst')
+    content = changes_rst.read_text()
     latest_version_re = r'^Version ([0-9.abrc]+)\n-{9,}\n\n\*(Unreleased|Released on .+)\*\n'
     version_line = f'Version {version}'
     underline = '-' * len(version_line)
@@ -116,8 +127,7 @@ def _create_changelog_stub(version):
     stub = template.format(version_line=version_line, underline=underline)
     content = content[:pos] + stub + content[pos:]
     step('Creating changelog stub for {}', version)
-    with open('CHANGES.rst', 'w') as f:
-        f.write(content)
+    changes_rst.write_text(content)
 
 
 @click.command()

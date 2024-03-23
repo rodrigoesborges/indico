@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -89,8 +89,7 @@ def schedule_contribution(contribution, start_dt, session_block=None, extend_par
         contribution.session = session_block.session
         contribution.session_block = session_block
         parent = session_block.timetable_entry
-    entry = create_timetable_entry(contribution.event, data, parent=parent, extend_parent=extend_parent)
-    return entry
+    return create_timetable_entry(contribution.event, data, parent=parent, extend_parent=extend_parent)
 
 
 def update_timetable_entry(entry, data):

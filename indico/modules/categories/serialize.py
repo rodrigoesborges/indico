@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -52,7 +52,7 @@ def serialize_categories_ical(category_ids, user, event_filter=True, event_filte
     events = list(it)
     # make sure the parent categories are in sqlalchemy's identity cache.
     # this avoids query spam from `protection_parent` lookups
-    _parent_categs = (Category._get_chain_query(Category.id.in_({e.category_id for e in events}))  # noqa: F841
+    _parent_categs = (Category._get_chain_query(Category.id.in_({e.category_id for e in events}))  # noqa: F841,RUF100
                       .options(load_only('id', 'parent_id', 'protection_mode'),
                                joinedload('acl_entries'))
                       .all())
@@ -72,6 +72,7 @@ def serialize_category_atom(category, url, user, event_filter):
     """
     query = (Event.query
              .filter(Event.category_chain_overlaps(category.id),
+                     Event.is_visible_in(category.id),
                      ~Event.is_deleted,
                      event_filter)
              .options(load_only('id', 'category_id', 'start_dt', 'title', 'description', 'protection_mode',

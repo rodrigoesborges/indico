@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -7,7 +7,6 @@
 
 import fnmatch
 import re
-from collections import defaultdict
 from datetime import datetime
 from hashlib import md5
 from operator import attrgetter
@@ -35,7 +34,6 @@ from indico.modules.events.sessions.models.blocks import SessionBlock
 from indico.modules.events.sessions.models.sessions import Session
 from indico.modules.events.timetable.legacy import TimetableSerializer
 from indico.modules.events.timetable.models.entries import TimetableEntry
-from indico.modules.rb.models.reservation_occurrences import ReservationOccurrence
 from indico.util.date_time import iterdays
 from indico.util.i18n import orig_string
 from indico.util.signals import values_from_signal
@@ -165,7 +163,6 @@ class SerializerBase:
 
     def _serialize_person(self, person, person_type, can_manage=False):
         """Serialize an event associated person."""
-
         if person:
             data = {
                 '_type': person_type,
@@ -209,9 +206,9 @@ class SerializerBase:
             'emailHash': md5(convener.person.email.encode()).hexdigest() if convener.person.email else None
         }
         if can_manage:
-            data['address'] = convener.address,
-            data['phone'] = convener.phone,
-            data['email'] = convener.person.email,
+            data['address'] = convener.address
+            data['phone'] = convener.phone
+            data['email'] = convener.person.email
         return data
 
     def _serialize_session(self, session_, can_manage=False):
@@ -282,24 +279,12 @@ class SerializerBase:
             'references': [self.serialize_reference(x) for x in event.references]
         }
 
-    def _serialize_reservations(self, reservations):
-        res = defaultdict(list)
-        for resv in reservations:
-            occurrences = (resv.occurrences
-                           .filter(ReservationOccurrence.is_valid)
-                           .options(ReservationOccurrence.NO_RESERVATION_USER_STRATEGY)
-                           .all())
-            res[resv.room.full_name] += [{'startDateTime': occ.start_dt, 'endDateTime': occ.end_dt}
-                                         for occ in occurrences]
-        return res
-
     def _build_session_event_api_data(self, event):
         data = self._build_event_api_data_base(event)
         data.update({
             '_fossil': 'conference',
             'adjustedStartDate': self._serialize_date(event.start_dt_local),
             'adjustedEndDate': self._serialize_date(event.end_dt_local),
-            'bookedRooms': self._serialize_reservations(event.reservations),
             'supportInfo': {
                 '_fossil': 'supportInfo',
                 'caption': event.contact_title,
@@ -402,7 +387,7 @@ class SerializerBase:
 
     def _serialize_subcontribution(self, subcontrib):
         can_manage = self.user is not None and subcontrib.contribution.can_manage(self.user)
-        data = {
+        return {
             '_type': 'SubContribution',
             '_fossil': 'subContributionMetadata',
             'id': (subcontrib.legacy_mapping.legacy_subcontribution_id
@@ -419,7 +404,6 @@ class SerializerBase:
             'references': [self.serialize_reference(x) for x in subcontrib.references],
             'code': subcontrib.code,
         }
-        return data
 
 
 class CategoryEventFetcher(IteratedDataFetcher, SerializerBase):
@@ -619,7 +603,7 @@ class CategoryEventFetcher(IteratedDataFetcher, SerializerBase):
             'creationDate': self._serialize_date(event.created_dt),
             'creator': self._serialize_person(event.creator, person_type='Avatar', can_manage=can_manage),
             'hasAnyProtection': event.effective_protection_mode != ProtectionMode.public,
-            'roomMapURL': event.room.map_url if event.room else None,
+            'roomMapURL': event.map_url,
             'folders': build_folders_api_data(event),
             'chairs': self._serialize_persons(event.person_links, person_type='ConferenceChair', can_manage=can_manage),
             'material': material_data,
@@ -765,7 +749,6 @@ class SessionFetcher(SessionContribFetcher, SerializerBase):
 
     def _build_sessions_api_data(self, sessions):
         """Return an aggregated list of session blocks given the sessions."""
-
         session_blocks = []
         for session_ in sessions:
             can_manage = self.user is not None and session_.can_manage(self.user)

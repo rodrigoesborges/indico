@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -22,6 +22,7 @@ import {camelizeKeys} from 'indico/utils/case';
       canEnterManually,
       defaultSearchExternal,
       nameFormat,
+      extraParams,
       ...rest
     } = options;
     const field = document.getElementById(fieldId);
@@ -54,6 +55,7 @@ import {camelizeKeys} from 'indico/utils/case';
         canEnterManually={canEnterManually}
         defaultSearchExternal={defaultSearchExternal}
         nameFormat={nameFormat}
+        extraParams={camelizeKeys(extraParams)}
         {...rest}
       />,
       document.getElementById(`person-link-field-${fieldId}`)

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -178,10 +178,10 @@ class IndicoPersistentScheduler(PersistentScheduler):
     def _print_schedule(self, deleted):
         table_data = [['Name', 'Schedule']]
         for entry in sorted(self.app.conf['beat_schedule'].values(), key=itemgetter('task')):
-            table_data.append([cformat('%{yellow!}{}%{reset}').format(entry['task']),
+            table_data.append([cformat('%{yellow!}{}%{reset}').format(entry['task']),  # noqa: PERF401
                                cformat('%{green}{!r}%{reset}').format(entry['schedule'])])
         for task_name in sorted(deleted):
-            table_data.append([cformat('%{yellow}{}%{reset}').format(task_name),
+            table_data.append([cformat('%{yellow}{}%{reset}').format(task_name),  # noqa: PERF401
                                cformat('%{red!}Disabled%{reset}')])
         print(AsciiTable(table_data, cformat('%{white!}Periodic Tasks%{reset}')).table)
 
@@ -193,6 +193,7 @@ class _CelerySAWrapper:
     through the Celery serializer and then fetching the actual objects
     again when executing the task.
     """
+
     __slots__ = ('identity_key',)
 
     def __init__(self, obj):

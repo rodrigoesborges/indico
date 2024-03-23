@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -54,11 +54,14 @@ export function handleSubmitError(error, fieldErrorMap = {}) {
 }
 
 /** Conditionally show content within a FinalForm depending on the value of another field */
-export const FieldCondition = ({when, is, children}) => (
+export const FieldCondition = ({when, is, children, inverted}) => (
   <Field
     name={when}
     subscription={{value: true}}
-    render={({input: {value}}) => (value === is ? children : null)}
+    render={({input: {value}}) =>
+      // eslint-disable-next-line no-bitwise
+      (value === is) ^ inverted ? children : null
+    }
   />
 );
 
@@ -66,10 +69,12 @@ FieldCondition.propTypes = {
   when: PropTypes.string.isRequired,
   is: PropTypes.any,
   children: PropTypes.node.isRequired,
+  inverted: PropTypes.bool,
 };
 
 FieldCondition.defaultProps = {
   is: true,
+  inverted: false,
 };
 
 /**
@@ -91,10 +96,12 @@ export function FinalModalForm({
   extraActions,
   disabledUntilChange,
   disabledAfterSubmit,
+  keepDirtyOnReinitialize,
   unloadPrompt,
   unloadPromptRouter,
   alignTop,
   submitLabel,
+  noSubmitButton,
   className,
   decorators,
   validate,
@@ -118,6 +125,7 @@ export function FinalModalForm({
       initialValuesEqual={initialValuesEqual}
       decorators={decorators}
       validate={validate}
+      keepDirtyOnReinitialize={keepDirtyOnReinitialize}
     >
       {fprops => (
         <Modal
@@ -147,12 +155,14 @@ export function FinalModalForm({
           </Modal.Content>
           <Modal.Actions style={{display: 'flex', justifyContent: 'flex-end'}}>
             {_.isFunction(extraActions) ? extraActions(fprops) : extraActions}
-            <FinalSubmitButton
-              form={`final-modal-form-${id}`}
-              label={submitLabel || Translate.string('Submit')}
-              disabledUntilChange={disabledUntilChange}
-              disabledAfterSubmit={disabledAfterSubmit}
-            />
+            {!noSubmitButton && (
+              <FinalSubmitButton
+                form={`final-modal-form-${id}`}
+                label={submitLabel || Translate.string('Submit')}
+                disabledUntilChange={disabledUntilChange}
+                disabledAfterSubmit={disabledAfterSubmit}
+              />
+            )}
             <Form.Field disabled={fprops.submitting}>
               <Button onClick={onClose} disabled={fprops.submitting}>
                 {fprops.dirty && !(fprops.submitSucceeded && disabledAfterSubmit) ? (
@@ -205,6 +215,8 @@ FinalModalForm.propTypes = {
   disabledUntilChange: PropTypes.bool,
   /** Whether to disable the submit button after the form is successfully submitted once. */
   disabledAfterSubmit: PropTypes.bool,
+  /** Whether to keep the form dirty after reinitializing it. */
+  keepDirtyOnReinitialize: PropTypes.bool,
   /**
    * Whether to ask the user to confirm when unloading the page or closing the dialog using
    * anything but the explicit cancel button.
@@ -219,6 +231,8 @@ FinalModalForm.propTypes = {
   alignTop: PropTypes.bool,
   /** A custom label for the submit button. */
   submitLabel: PropTypes.string,
+  /** Whether to render the form without a submit button. */
+  noSubmitButton: PropTypes.bool,
   /** Additional CSS classes to set on the SUI Form. */
   className: PropTypes.string,
   /**
@@ -246,10 +260,12 @@ FinalModalForm.defaultProps = {
   scrolling: false,
   disabledUntilChange: true,
   disabledAfterSubmit: false,
+  keepDirtyOnReinitialize: false,
   unloadPrompt: false,
   unloadPromptRouter: false,
   alignTop: false,
   submitLabel: null,
+  noSubmitButton: false,
   className: null,
   extraActions: null,
   style: null,

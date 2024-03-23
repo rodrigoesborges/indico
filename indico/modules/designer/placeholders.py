@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -29,18 +29,20 @@ __all__ = ('EventDatesPlaceholder', 'EventDescriptionPlaceholder', 'Registration
            'RegistrationPositionPlaceholder', 'RegistrationAddressPlaceholder', 'RegistrationCountryPlaceholder',
            'RegistrationPhonePlaceholder', 'EventTitlePlaceholder', 'CategoryTitlePlaceholder', 'EventRoomPlaceholder',
            'EventVenuePlaceholder', 'EventSpeakersPlaceholder', 'EventLogoPlaceholder', 'FixedTextPlaceholder',
-           'FixedImagePlaceholder')
+           'FixedImagePlaceholder', 'RegistrationAccompanyingPersonsCountPlaceholder', 'RegistrationPicturePlaceholder',
+           'RegistrationAccompanyingPersonsPlaceholder', 'RegistrationAccompanyingPersonsAbbrevPlaceholder')
 
 
-GROUP_TITLES = {
-    'registrant': _('Registrant Data'),
-    'event': _('Event Data'),
-    'fixed': _('Fixed Data')
+GROUPS = {
+    'event': {'title': _('Event Data'), 'position': 1},
+    'fixed': {'title': _('Fixed Data'), 'position': 2},
+    'registrant': {'title': _('Common Registrant Data'), 'position': 3},
+    'regform_fields': {'title': _('Custom Registrant Data'), 'position': 4},
 }
 
 
 class DesignerPlaceholder(Placeholder):
-    #: The group of the placeholder. Must be a valid key from `GROUP_TITLES`.
+    #: The group of the placeholder. Must be a valid key from `GROUPS`.
     group = None
     #: Data source for the placeholder.
     data_source = None
@@ -87,7 +89,10 @@ class FullNamePlaceholderBase(DesignerPlaceholder):
         title = ''
         if cls.with_title and not person['is_accompanying']:
             title = person['registration'].get_personal_data().get('title', '')
-        return format_full_name(person['first_name'], person['last_name'], title=title, **cls.name_options)
+        name_options = dict(cls.name_options)
+        name_options.setdefault('last_name_upper', False)
+        name_options.setdefault('abbrev_first_name', False)
+        return format_full_name(person['first_name'], person['last_name'], title=title, **name_options)
 
 
 class EventLogoPlaceholder(DesignerPlaceholder):
@@ -290,6 +295,37 @@ class RegistrationPricePlaceholder(RegistrationPlaceholder):
         return format_currency(registration.price, registration.currency, locale='en_GB')
 
 
+class RegistrationAccompanyingPersonsCountPlaceholder(RegistrationPlaceholder):
+    name = 'num_accompanying_persons'
+    description = _('Number of accompanying persons')
+
+    @classmethod
+    def render(cls, registration):
+        return str(registration.num_accompanying_persons)
+
+
+class AccompanyinPersonsPlaceholderBase(RegistrationPlaceholder):
+    name_options = None
+
+    @classmethod
+    def render(cls, registration):
+        names = [format_full_name(p['firstName'], p['lastName'], **cls.name_options)
+                 for p in registration.accompanying_persons]
+        return ', '.join(names)
+
+
+class RegistrationAccompanyingPersonsPlaceholder(AccompanyinPersonsPlaceholderBase):
+    name = 'accompanying_persons'
+    description = _('Accompanying persons')
+    name_options = {'abbrev_first_name': False, 'last_name_first': False}
+
+
+class RegistrationAccompanyingPersonsAbbrevPlaceholder(AccompanyinPersonsPlaceholderBase):
+    name = 'accompanying_persons_abbrev'
+    description = _('Accompanying persons (abbrev.)')
+    name_options = {'last_name_first': False}
+
+
 class RegistrationFriendlyIDPlaceholder(RegistrationPlaceholder):
     name = 'registration_friendly_id'
     description = _('Registration ID')
@@ -326,6 +362,19 @@ class RegistrationPhonePlaceholder(RegistrationPDPlaceholder):
     field = 'phone'
 
 
+class RegistrationPicturePlaceholder(RegistrationPDPlaceholder):
+    name = 'picture'
+    description = _('Picture')
+    is_image = True
+
+    @classmethod
+    def render(cls, registration):
+        if picture_data := registration.get_personal_data_picture():
+            buf = picture_data.open()
+            return Image.open(buf)
+        return None
+
+
 class RegistrationTicketQRPlaceholder(DesignerPlaceholder):
     group = 'registrant'
     data_source = 'person'
@@ -359,3 +408,70 @@ class FixedImagePlaceholder(DesignerPlaceholder):
     def render(cls, item):
         buf = DesignerImageFile.get(item['image_id']).open()
         return Image.open(buf)
+
+
+class RegistrationFormFieldPlaceholder(DesignerPlaceholder):
+    """Placeholder representing a `RegistrationData` instance for a given regform field.
+
+    Unlike other placeholders which are always present, registration data depends
+    on the linked regform and thus the placeholders must be generated on the fly.
+    """
+
+    group = 'regform_fields'
+
+    def __init__(self, field):
+        self.field = field
+        self.name = f'field-{field.id}'
+        self.is_image = self.field.input_type == 'picture'
+
+    @property
+    def description(self):
+        return self.field.title
+
+    def render(self, registration):
+        data_by_field = registration.data_by_field
+        data = data_by_field.get(self.field.id, None)
+        if data is None:
+            return ''
+        return self._render(data)
+
+    def _render(self, data):
+        if self.is_image:
+            return self._render_image(data)
+
+        friendly_data = data.friendly_data
+        if friendly_data is None:
+            return ''
+
+        if self.field.input_type == 'multi_choice':
+            return ' · '.join(friendly_data)
+        elif self.field.input_type == 'accommodation':
+            return self._render_accommodation(friendly_data)
+        else:
+            return friendly_data
+
+    def _render_image(self, data):
+        return Image.open(data.open())
+
+    def _render_accommodation(self, friendly_data):
+        if friendly_data['is_no_accommodation']:
+            return _('No accommodation')
+
+        arrival = format_date(friendly_data['arrival_date'])  # TODO: include locale
+        departure = format_date(friendly_data['departure_date'])
+        accommodation = friendly_data['choice']
+        return f'{accommodation} ({arrival} - {departure})'
+
+    @classmethod
+    def from_designer_item(cls, regform, item):
+        """Create an instance of this class from a designer item."""
+        type_ = item['type']
+        try:
+            field_id = int(type_.removeprefix('field-'))
+        except ValueError:
+            raise ValueError(f'Invalid field type: {type_}')
+
+        field = next((field for field in regform.active_fields if field.id == field_id), None)
+        if not field:
+            return None
+        return cls(field=field)

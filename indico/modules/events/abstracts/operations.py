@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -138,6 +138,7 @@ def update_abstract(abstract, abstract_data, custom_fields_data=None):
         changes.update(set_custom_fields(abstract, custom_fields_data))
     abstract.modified_dt = now_utc()
     db.session.flush()
+    signals.event.abstract_updated.send(abstract)
     logger.info('Abstract %s modified by %s', abstract, session.user)
     log_fields = {
         'title': 'Title',
@@ -153,7 +154,7 @@ def update_abstract(abstract, abstract_data, custom_fields_data=None):
             'convert': lambda change: [t.name if t else None for t in change]
         }
     }
-    for field_name, change in changes.items():
+    for field_name in changes:
         # we skip skip None -> '' changes (editing an abstract that
         # did not have a value for a new field yet without filling
         # it out)
@@ -220,6 +221,7 @@ def judge_abstract(abstract, abstract_data, judgment, judge, contrib_session=Non
             abstract.accepted_contrib_type = abstract.submitted_contrib_type
         if not abstract.contribution:
             abstract.contribution = create_contribution_from_abstract(abstract, contrib_session)
+            signals.event.abstract_accepted.send(abstract, contribution=abstract.contribution)
         if abstract.accepted_track:
             log_data['Track'] = abstract.accepted_track.title
         if abstract.accepted_contrib_type:
@@ -276,8 +278,8 @@ def _merge_person_links(target_abstract, source_abstract):
             else:
                 link.display_order = 0
             new_links.add(link)
-            for column_name in {'_title', '_affiliation', '_affiliation_id', '_address', '_phone', '_first_name',
-                                '_last_name'}:
+            for column_name in ('_title', '_affiliation', '_affiliation_id', '_address', '_phone', '_first_name',
+                                '_last_name'):
                 setattr(link, column_name, getattr(source_link, column_name))
 
     # Add new links in order

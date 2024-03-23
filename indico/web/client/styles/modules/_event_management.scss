@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -328,7 +328,6 @@
       text-align: right;
       background-image: linear-gradient(to top, $black, rgba($black, 0));
       border-radius: 0 0 2px 2px;
-      box-sizing: border-box;
       padding: 0.5em 1em;
       position: absolute;
       bottom: 0;

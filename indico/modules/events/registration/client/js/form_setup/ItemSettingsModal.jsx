@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -20,8 +20,10 @@ import {
   validators as v,
   parsers as p,
 } from 'indico/react/forms';
+import {Fieldset} from 'indico/react/forms/fields';
 import {FinalModalForm} from 'indico/react/forms/final-form';
 import {Translate, Param} from 'indico/react/i18n';
+import {renderPluginComponents} from 'indico/utils/plugins';
 
 import {getFieldRegistry} from '../form/fields/registry';
 import {getStaticData, getItemById} from '../form/selectors';
@@ -29,13 +31,15 @@ import {getStaticData, getItemById} from '../form/selectors';
 import * as actions from './actions';
 import ItemTypeDropdown from './ItemTypeDropdown';
 
+const EMPTY_DATA = {}; // avoid new object on every selector call since this triggers a warning
+
 export default function ItemSettingsModal({id, sectionId, defaultNewItemType, onClose}) {
   const dispatch = useDispatch();
   const [newItemType, setNewItemType] = useState(defaultNewItemType);
   const editing = id !== null;
   const staticData = useSelector(getStaticData);
   const {inputType: existingInputType, fieldIsRequired, ...itemData} = useSelector(state =>
-    editing ? getItemById(state, id) : {}
+    editing ? getItemById(state, id) : EMPTY_DATA
   );
   const inputType = editing ? existingInputType : newItemType;
   const fieldRegistry = getFieldRegistry();
@@ -146,8 +150,9 @@ export default function ItemSettingsModal({id, sectionId, defaultNewItemType, on
             />
           )}
           {SettingsComponent && <SettingsComponent {...itemData} />}
+          {renderPluginComponents(`regform-${inputType}-field-settings`, {...itemData})}
           {!meta.noRetentionPeriod && !fieldIsRequired && (
-            <>
+            <Fieldset legend={Translate.string('Privacy')} compact>
               <FinalInput
                 name="retentionPeriod"
                 type="number"
@@ -157,6 +162,9 @@ export default function ItemSettingsModal({id, sectionId, defaultNewItemType, on
                 max="521"
                 validate={v.optional(v.range(1, 521))}
                 label={Translate.string('Retention period (weeks)')}
+                description={Translate.string(
+                  'Specify how long user-provided data for this field will be preserved in the database.'
+                )}
               />
               <FormSpy subscription={{values: true}}>
                 {({values}) =>
@@ -175,7 +183,7 @@ export default function ItemSettingsModal({id, sectionId, defaultNewItemType, on
                   )
                 }
               </FormSpy>
-            </>
+            </Fieldset>
           )}
           {isUnsupportedField && (
             <Message visible warning>

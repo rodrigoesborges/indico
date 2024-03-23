@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -47,10 +47,11 @@ import {
 import {DailyTimelineContent, TimelineLegend} from '../timeline';
 
 import * as bookingsActions from './actions';
-import LazyBookingObjectLink from './LazyBookingObjectLink';
+import LazyBookingLinks from './LazyBookingLinks';
 import * as bookingsSelectors from './selectors';
 
 import './BookingDetails.module.scss';
+import '../../components/WeekdayInformation.module.scss';
 
 class BookingDetails extends React.Component {
   static propTypes = {
@@ -859,9 +860,9 @@ class BookingDetails extends React.Component {
         canEdit,
         isAccepted,
         newBookingId,
-        isLinkedToObject,
-        link,
+        isLinkedToObjects,
         externalDetailsURL,
+        recurrenceWeekdays,
       },
     } = this.props;
     const dates = {startDate: startDt, endDate: endDt};
@@ -908,16 +909,15 @@ class BookingDetails extends React.Component {
                   timeSlot={times}
                   onClickOccurrences={this.showOccurrences}
                   occurrenceCount={occurrenceCount}
+                  recurrenceWeekdays={recurrenceWeekdays}
                 />
               </Grid.Column>
               <Grid.Column>
                 <>
                   {bookedForUser && this.renderBookedFor(bookedForUser)}
-                  {this.renderReason(bookingReason)}
+                  {bookingReason && this.renderReason(bookingReason)}
                   {room.canUserViewInternalNotes && this.renderNotes(internalNote)}
-                  {isLinkedToObject && (
-                    <LazyBookingObjectLink type={_.camelCase(link.type)} id={link.id} />
-                  )}
+                  {isLinkedToObjects && <LazyBookingLinks id={id} />}
                   {this.renderBookingHistory(editLogs, createdDt, createdByUser)}
                   {this.renderMessages(error, newBookingId)}
                 </>

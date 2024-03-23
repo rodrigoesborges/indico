@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -64,6 +64,13 @@ class WPCategoryCalendar(WPCategory):
     """WP for category calendar page."""
 
     bundles = ('module_categories.calendar.js', 'module_categories.calendar.css')
+
+    def _get_breadcrumbs(self):
+        return render_breadcrumbs(
+            _('Calendar'),
+            category=self.category,
+            category_url_factory=lambda cat, management: url_for('categories.calendar', cat)
+        )
 
 
 class WPCategoryManagement(WPCategory):

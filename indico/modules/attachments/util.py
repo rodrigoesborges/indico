@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -76,9 +76,8 @@ def can_manage_attachments(obj, user, allow_admin=True):
     if isinstance(obj, db.m.Contribution) and obj.can_manage(user, 'submit', allow_admin=allow_admin):
         return True
     if isinstance(obj, db.m.SubContribution):
-        from indico.modules.events.contributions import subcontribution_settings
-        speakers_can_submit = subcontribution_settings.get(obj.contribution.event, 'speakers_can_submit')
-        if speakers_can_submit and any(speaker.person.user == user for speaker in obj.speakers):
+        subcontrib_speakers_can_submit = obj.contribution.event.subcontrib_speakers_can_submit
+        if subcontrib_speakers_can_submit and any(speaker.person.user == user for speaker in obj.speakers):
             return True
         return can_manage_attachments(obj.contribution, user, allow_admin=allow_admin)
     return False

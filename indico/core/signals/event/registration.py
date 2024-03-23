@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -18,7 +18,7 @@ Called when the registration personal data is modified. The `sender` is the
 registration_state_updated = _signals.signal('registration-state-updated', '''
 Called when the state of a registration changes. The `sender` is the
 `Registration` object; the previous state is passed in the `previous_state`
-kwarg.
+kwarg; the `silent` kwarg can be set to `True` to skip logging.
 ''')
 
 registration_checkin_updated = _signals.signal('registration-checkin-updated', '''
@@ -44,15 +44,6 @@ The `permanent` kwarg indicates whether the registration is being permanently de
 e.g. due to it exceeding its retention period.
 ''')
 
-registration_form_wtform_created = _signals.signal('registration_form_wtform_created', '''
-Called when a the wtform is created for rendering/processing a registration form.
-The sender is the `RegistrationForm` object. The generated WTForm class is
-passed in the `wtform_cls` kwarg and it may be modified. The `registration`
-kwarg contains a `Registration` object when called from registration edit
-endpoints. The `management` kwarg is set to `True` if the registration form is
-rendered/processed from the event management area.
-''')
-
 registration_form_created = _signals.signal('registration-form-created', '''
 Called when a new registration form is created. The `sender` is the
 `RegistrationForm` object.
@@ -71,6 +62,11 @@ in the `ticket_data` kwarg and may be modified.
 registration_form_deleted = _signals.signal('registration-form-deleted', '''
 Called when a registration form is removed. The `sender` is the
 `RegistrationForm` object.
+''')
+
+registration_form_field_deleted = _signals.signal('registration-form-field-deleted', '''
+Called when a registration form field is removed. The `sender` is the
+`RegistrationFormField` object.
 ''')
 
 is_ticketing_handled = _signals.signal('is-ticketing-handled', '''
@@ -93,8 +89,8 @@ ticket for a registrant.
 ''')
 
 is_field_data_locked = _signals.signal('is-field-data-locked', '''
-Called when resolving whether Indico should let a registrant change a data value
-in their registration.  The participant's `Registration` is passed as `registration`.
+Called when resolving whether Indico should let a data value be modified
+in a registration. The participant's `Registration` is passed as `registration`.
 The `sender` is the `RegistrationFormItem` object.
 
 This signal returns a string containing the reason for the item being locked,
@@ -132,4 +128,16 @@ registrant_list_action_menu = _signals.signal('registrant-list-action-menu', '''
 Called when composing the list of menu items to be displayed under the "Actions" button
 at the top of the list of registrants/participants. The `sender` is the corresponding
 registration form.
+''')
+
+google_wallet_ticket_class_data = _signals.signal('google-wallet-ticket-class-data', '''
+Called when data for a Google Wallet ticket class has been generated. The `sender` is the
+`Event` object, the `data` kwarg contains the data that will be passed to the Google
+Wallet API.
+''')
+
+google_wallet_ticket_object_data = _signals.signal('google-wallet-ticket-object-data', '''
+Called when data for a Google Wallet ticket object has been generated. The `sender` is the
+`Registration` object, the `data` kwarg contains the data that will be passed to the Google
+Wallet API.
 ''')

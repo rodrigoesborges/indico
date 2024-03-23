@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -23,6 +23,7 @@ import styles from '../../../styles/regform.module.scss';
 
 export default function CheckboxInput({
   id,
+  htmlId,
   htmlName,
   disabled,
   title,
@@ -35,9 +36,11 @@ export default function CheckboxInput({
 }) {
   const currency = useSelector(getCurrency);
   const existingValue = useSelector(state => getFieldValue(state, id));
+  const checkboxId = `${htmlId}-checkbox`;
 
   return (
     <FinalCheckbox
+      id={checkboxId}
       fieldProps={{className: `${styles.field} ${showAsRequired ? 'required' : ''}`}}
       name={htmlName}
       label={title}
@@ -65,6 +68,7 @@ export default function CheckboxInput({
 
 CheckboxInput.propTypes = {
   id: PropTypes.number.isRequired,
+  htmlId: PropTypes.string.isRequired,
   htmlName: PropTypes.string.isRequired,
   disabled: PropTypes.bool,
   title: PropTypes.string.isRequired,

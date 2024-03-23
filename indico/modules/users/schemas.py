@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -9,7 +9,7 @@ from marshmallow import fields, post_dump, post_load, validate
 from marshmallow.fields import List, String
 
 from indico.core.marshmallow import mm
-from indico.modules.categories import Category
+from indico.modules.categories.models.categories import Category
 from indico.modules.events import Event
 from indico.modules.users import User
 from indico.modules.users.models.affiliations import Affiliation

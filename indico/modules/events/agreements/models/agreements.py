@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -31,6 +31,7 @@ class AgreementState(RichIntEnum):
 
 class Agreement(db.Model):
     """Agreements between a person and Indico."""
+
     __tablename__ = 'agreements'
     __table_args__ = (db.UniqueConstraint('event_id', 'type', 'identifier'),
                       {'schema': 'events'})
@@ -175,8 +176,7 @@ class Agreement(db.Model):
 
     def __repr__(self):
         state = self.state.name if self.state is not None else None
-        return '<Agreement({}, {}, {}, {}, {}, {})>'.format(self.id, self.event_id, self.type, self.identifier,
-                                                            self.person_email, state)
+        return f'<Agreement({self.id}, {self.event_id}, {self.type}, {self.identifier}, {self.person_email}, {state})>'
 
     @staticmethod
     def create_from_data(event, type_, person):

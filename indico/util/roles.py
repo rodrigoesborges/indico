@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -59,7 +59,7 @@ class ImportRoleMembersMixin:
             if form.remove_existing.data:
                 deleted_members = self.role.members - users
                 for member in deleted_members:
-                    self.logger.info(f'User {member} removed from role {self.role} by {session.user}')
+                    self.logger.info('User %s removed from role %s by %s', member, self.role, session.user)
                 self.role.members = users
                 self.role.obj.log(self.log_realm, LogKind.negative, 'Roles',
                                   f'Removed users from role "{self.role.name}"', session.user,
@@ -68,7 +68,7 @@ class ImportRoleMembersMixin:
             else:
                 self.role.members |= users
             for user in new_members:
-                self.logger.info(f'User {user} added to role {self.role} by {session.user}')
+                self.logger.info('User %s added to role %s by %s', user, self.role, session.user)
             if new_members:
                 self.role.obj.log(self.log_realm, LogKind.positive, 'Roles',
                                   f'Added users to role "{self.role.name}"', session.user,
@@ -102,7 +102,7 @@ class RoleSchema(mm.Schema):
 
 
 class RolesAPIMixin:
-    """JSON API for roles"""
+    """JSON API for roles."""
 
     def _process(self):
         return RoleSchema(many=True).jsonify(self.roles)

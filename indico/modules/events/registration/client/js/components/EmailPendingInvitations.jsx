@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -28,7 +28,6 @@ export default function EmailPendingInvitations({metadataURL, previewURL, sendUR
   } = data || {};
 
   const handleSubmit = async data => {
-    data.body = data.body.getData ? data.body.getData() : data.body;
     let resp;
     try {
       resp = await indicoAxios.post(sendURL, data);

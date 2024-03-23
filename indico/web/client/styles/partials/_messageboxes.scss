@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -14,7 +14,7 @@ $default-spacing: 10px;
   @include default-border-radius();
   @extend .flexrow;
   flex-wrap: wrap;
-  color: $light-black;
+  color: $dark-black;
   padding: $default-spacing;
   margin-bottom: 18px;
   // overrides custom line-height set by semantic ui that breaks message-boxes
@@ -35,6 +35,11 @@ $default-spacing: 10px;
 
     p:last-child {
       margin-bottom: 0;
+    }
+
+    ul,
+    ol {
+      margin-left: 1em;
     }
 
     &.normal-size {

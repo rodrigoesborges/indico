@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -8,6 +8,7 @@
 import itertools
 
 from sqlalchemy.orm import contains_eager, joinedload, load_only, raiseload, selectinload, subqueryload, undefer
+from werkzeug.exceptions import BadRequest
 
 from indico.core.db import db
 from indico.core.db.sqlalchemy.links import LinkType
@@ -141,7 +142,11 @@ class InternalSearch(IndicoSearchProvider):
             return self._can_access(user, obj.contribution, allow_effective_protection_mode=False,
                                     admin_override_enabled=admin_override_enabled)
         else:
-            raise Exception(f'Unexpected object: {obj}')
+            raise TypeError(f'Unexpected object: {obj}')
+
+        if isinstance(obj, Event) and not obj.can_display(user, allow_admin=admin_override_enabled):
+            return False
+
         return (protection_mode == ProtectionMode.public or
                 obj.can_access(user, allow_admin=admin_override_enabled))
 
@@ -182,7 +187,13 @@ class InternalSearch(IndicoSearchProvider):
         return res, pagenav
 
     def search_categories(self, q, user, page, category_id, admin_override_enabled):
-        query = Category.query if not category_id else Category.get(category_id).deep_children_query
+        if not category_id:
+            query = Category.query
+        else:
+            category = Category.get(category_id)
+            if category is None:
+                raise BadRequest('Invalid category')
+            query = category.deep_children_query
 
         query = (query
                  .filter(Category.title_matches(q),

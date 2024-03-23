@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -152,7 +152,7 @@ class EditingRevisionCommentSchema(mm.SQLAlchemyAutoSchema):
 class EditingRevisionSchema(mm.SQLAlchemyAutoSchema):
     class Meta:
         model = EditingRevision
-        fields = ('id', 'created_dt', 'user', 'files', 'comment', 'comment_html',
+        fields = ('id', 'created_dt', 'modified_dt', 'user', 'files', 'comment', 'comment_html',
                   'comments', 'type', 'is_undone', 'is_editor_revision', 'tags', 'create_comment_url',
                   'download_files_url', 'review_url', 'confirm_url', 'custom_actions', 'custom_action_url')
 
@@ -253,6 +253,15 @@ class EditableBasicSchema(mm.SQLAlchemyAutoSchema):
     timeline_url = fields.String()
 
 
+class EditableWithTagsSchema(EditableBasicSchema):
+    class Meta(EditableBasicSchema.Meta):
+        model = Editable
+        fields = (*EditableBasicSchema.Meta.fields, 'tags')
+
+    tags = fields.List(fields.Nested(EditingTagSchema, only=('id', 'code', 'title', 'color')),
+                       attribute='latest_revision.tags')
+
+
 class EditingEditableListSchema(mm.SQLAlchemyAutoSchema):
     class Meta:
         model = Contribution
@@ -265,7 +274,7 @@ class EditingEditableListSchema(mm.SQLAlchemyAutoSchema):
         editable = contribution.get_editable(editable_type)
         if not editable:
             return None
-        return EditableBasicSchema().dump(editable)
+        return EditableWithTagsSchema().dump(editable)
 
 
 class FilteredEditableSchema(mm.SQLAlchemyAutoSchema):

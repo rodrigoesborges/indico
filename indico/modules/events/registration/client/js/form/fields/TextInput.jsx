@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -18,10 +18,11 @@ import '../../../styles/regform.module.scss';
 
 const attributeMap = {minLength: 'minLength', maxLength: 'maxLength'};
 
-export default function TextInput({htmlName, disabled, title, isRequired, ...props}) {
+export default function TextInput({htmlId, htmlName, disabled, title, isRequired, ...props}) {
   const inputProps = mapPropsToAttributes(props, attributeMap, TextInput.defaultProps);
   return (
     <FinalInput
+      id={htmlId}
       type="text"
       name={htmlName}
       {...inputProps}
@@ -32,6 +33,7 @@ export default function TextInput({htmlName, disabled, title, isRequired, ...pro
 }
 
 TextInput.propTypes = {
+  htmlId: PropTypes.string.isRequired,
   htmlName: PropTypes.string.isRequired,
   disabled: PropTypes.bool,
   title: PropTypes.string.isRequired,

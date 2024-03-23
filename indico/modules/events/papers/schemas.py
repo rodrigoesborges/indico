@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -175,7 +175,7 @@ class PaperReviewDumpSchema(PaperReviewSchema):
 
 class PaperRevisionDumpSchema(PaperRevisionSchema):
     class Meta(PaperRevisionSchema.Meta):
-        fields = PaperRevisionSchema.Meta.fields + ('reviews',)
+        fields = (*PaperRevisionSchema.Meta.fields, 'reviews')
         exclude = ('reviewer_data',)
 
     reviews = List(Nested(PaperReviewDumpSchema))

@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -44,7 +44,7 @@ import * as bookRoomSelectors from './selectors';
 
 import './BookRoomModal.module.scss';
 
-function validate({usage, user, reason}, reasonRequired) {
+function validate({usage, user, reason}, requireReason) {
   const errors = {};
   if (!usage) {
     errors.usage = Translate.string('Please choose an option!');
@@ -52,7 +52,7 @@ function validate({usage, user, reason}, reasonRequired) {
   if (usage === 'someone' && !user) {
     errors.user = Translate.string('Please specify a user');
   }
-  if (reasonRequired && !reason) {
+  if (requireReason && !reason) {
     errors.reason = Translate.string('You need to provide a reason');
   }
   if (reason && reason.length < 3) {
@@ -93,7 +93,7 @@ class BookRoomModal extends React.Component {
       booking: IndicoPropTypes.i18n,
       preBooking: IndicoPropTypes.i18n,
     }),
-    reasonRequired: PropTypes.bool,
+    bookingReasonRequired: PropTypes.string.isRequired,
     bookingGracePeriod: PropTypes.number,
   };
 
@@ -106,7 +106,6 @@ class BookRoomModal extends React.Component {
       booking: <Translate>Create Booking</Translate>,
       preBooking: <Translate>Create Pre-booking</Translate>,
     },
-    reasonRequired: true,
     bookingGracePeriod: null,
   };
 
@@ -517,7 +516,7 @@ class BookRoomModal extends React.Component {
       ? {children: replaceMessages[link.type]}
       : assignMessages[link.type];
     return (
-      <BookingObjectLink link={link} pending>
+      <BookingObjectLink link={link}>
         {!this.alreadyLinked && (
           <FinalCheckbox name="linkBack" disabled={disabled} toggle label={label} />
         )}
@@ -533,7 +532,7 @@ class BookRoomModal extends React.Component {
       timeInformationComponent: TimeInformationComponent,
       defaultTitles,
       link,
-      reasonRequired,
+      bookingReasonRequired,
       isAdminOverrideEnabled,
       bookingGracePeriod,
     } = this.props;
@@ -542,6 +541,8 @@ class BookRoomModal extends React.Component {
       return null;
     }
 
+    const requireReason =
+      {always: true, never: false, not_for_events: !link}[bookingReasonRequired] ?? true;
     const {skipConflicts, bookingConflictsVisible} = this.state;
     const linkBack = !!link && !this.hasLinkConflict;
     const occurrenceCount = availability && availability.dateRange.length;
@@ -576,6 +577,7 @@ class BookRoomModal extends React.Component {
                 recurrence={recurrence}
                 onClickOccurrences={this.showConflicts}
                 occurrenceCount={occurrenceCount}
+                recurrenceWeekdays={recurrence.weekdays}
               />
             </Grid.Column>
             <Grid.Column width={8}>
@@ -617,9 +619,10 @@ class BookRoomModal extends React.Component {
                   </FieldCondition>
                   <FinalTextArea
                     name="reason"
+                    nullIfEmpty
                     placeholder={Translate.string('Reason for booking')}
                     disabled={fprops.submitSucceeded}
-                    required={reasonRequired}
+                    required={requireReason}
                   />
                 </Segment>
                 {!link &&
@@ -701,7 +704,7 @@ class BookRoomModal extends React.Component {
       <Modal open onClose={this.onClose} size="large" closeIcon>
         <FinalForm
           onSubmit={this.submitBooking}
-          validate={values => validate(values, reasonRequired)}
+          validate={values => validate(values, requireReason)}
           decorators={[formDecorator]}
           render={renderModalContent}
           initialValues={{user: null, linkBack}}
@@ -732,6 +735,7 @@ export default connect(
     link: linkingSelectors.getLinkObject(state),
     isAdminOverrideEnabled: userSelectors.isUserAdminOverrideEnabled(state),
     bookingGracePeriod: configSelectors.getBookingGracePeriod(state),
+    bookingReasonRequired: configSelectors.getBookingReasonRequired(state),
   }),
   dispatch => ({
     actions: bindActionCreators(
@@ -743,7 +747,7 @@ export default connect(
         createBooking: (data, props) => {
           const {reason, internalNote, usage, user, linkType, linkId, linkBack} = data;
           const {
-            bookingData: {recurrence, dates, timeSlot, isPrebooking},
+            bookingData: {recurrence, dates, recurrenceWeekdays, timeSlot, isPrebooking},
             room,
             isAdminOverrideEnabled,
           } = props;
@@ -754,6 +758,7 @@ export default connect(
               usage,
               user,
               recurrence,
+              recurrenceWeekdays,
               dates,
               timeSlot,
               room,

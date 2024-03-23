@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -79,7 +79,7 @@ def make_diff_log(changes, fields):
         else:
             type_ = 'text'
             change = list(map(str, map(orig_string, change)))
-        data[title] = list(change) + [type_]
+        data[title] = [*change, type_]
     return data
 
 

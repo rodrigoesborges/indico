@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -13,7 +13,6 @@ from uuid import uuid4
 from flask import Blueprint, Flask, g, request
 from flask.blueprints import BlueprintSetupState
 from flask.globals import _cv_app
-from flask.helpers import locked_cached_property
 from flask.testing import FlaskClient
 from flask.wrappers import Request
 from flask_pluginengine import PluginFlaskMixin
@@ -66,6 +65,9 @@ class IndicoRequest(Request):
         if self.remote_addr is not None and self.remote_addr.startswith('::ffff:'):
             # convert ipv6-style ipv4 to the regular ipv4 notation
             self.remote_addr = self.remote_addr[7:]
+        if self.remote_addr is not None and '%' in self.remote_addr:
+            # remove interface specifiers in case of link-local ipv6
+            self.remote_addr = self.remote_addr.split('%', 1)[0]
 
     @cached_property
     def id(self):
@@ -205,7 +207,7 @@ class IndicoBlueprint(Blueprint):
                 if event_id is not None:
                     require_feature(event_id, event_feature)
 
-    @locked_cached_property
+    @cached_property
     def jinja_loader(self):
         if self.template_folder is not None:
             return IndicoFileSystemLoader(os.path.join(self.root_path, self.template_folder),

@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -26,6 +26,7 @@ export const initialState = {
   internalNotesEnabled: false,
   privacyPolicyHTML: null,
   contactEmail: null,
+  bookingReasonRequired: true,
 };
 
 export default combineReducers({
@@ -44,6 +45,7 @@ export default combineReducers({
           helpURL,
           contactEmail,
           hasPrivacyPolicy,
+          bookingReasonRequired,
           hasTos: hasTOS,
           tosHtml: tosHTML,
           privacyPolicyHtml: privacyPolicyHTML,
@@ -64,6 +66,7 @@ export default combineReducers({
           privacyPolicyHTML,
           contactEmail,
           internalNotesEnabled,
+          bookingReasonRequired,
         };
       }
       case adminActions.SETTINGS_RECEIVED:

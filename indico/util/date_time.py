@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -55,10 +55,10 @@ def now_utc(exact=True):
     :param exact: Set to ``False`` to set seconds/microseconds to 0.
     :return: A timezone-aware `datetime` object
     """
-    now = datetime.utcnow()
+    now = datetime.now(pytz.UTC)
     if not exact:
         now = now.replace(second=0, microsecond=0)
-    return pytz.utc.localize(now)
+    return now
 
 
 def as_utc(dt):
@@ -206,7 +206,7 @@ def format_human_timedelta(delta, granularity='seconds', narrow=False):
     }
     if narrow:
         long_names = short_names
-    values = {key: 0 for key in field_order}
+    values = dict.fromkeys(field_order, 0)
     values['seconds'] = delta.total_seconds()
     values['days'], values['seconds'] = divmod(values['seconds'], 86400)
     values['hours'], values['seconds'] = divmod(values['seconds'], 3600)
@@ -304,7 +304,6 @@ def format_pretty_datetime(dt, locale=None, tzinfo=None):
     :param locale: the locale to use for formatting
     :param tzinfo: the timezone to use
     """
-
     return _format_pretty_datetime(dt, locale, tzinfo, {
         'last_day': _("'Yesterday' 'at' {time_fmt}"),
         'same_day': _("'Today' 'at' {time_fmt}"),

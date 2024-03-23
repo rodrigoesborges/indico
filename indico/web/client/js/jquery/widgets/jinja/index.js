@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -8,7 +8,6 @@
 import './buttons_boolean_widget';
 import './category_picker_widget';
 import './captcha_widget';
-import './ckeditor_widget';
 import './color_picker_widget';
 import './date_widget';
 import './datetime_widget';
@@ -30,4 +29,5 @@ import './protection_widget';
 import './typeahead_widget';
 import './permissions_widget';
 import './sui_color_picker_widget';
-import './sui_remote_search_dropdown_widget';
+import './sui_search_dropdown_widget';
+import './tinymce_widget';

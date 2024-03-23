@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -32,7 +32,6 @@ from indico.util.mimetypes import icon_from_mimetype
     ('application/vnd.openxmlformats-officedocument.spreadsheetml.template', 'default_icon'),
     ('application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'icon-file-word'),
     ('application/vnd.openxmlformats-officedocument.wordprocessingml.template', 'default_icon'),
-    ('application/vnd.oasis.opendocument.chart', 'icon-file-openoffice'),
     ('application/vnd.oasis.opendocument.chart', 'icon-file-openoffice'),
     ('application/vnd.oasis.opendocument.chart-template', 'icon-file-openoffice'),
     ('application/vnd.oasis.opendocument.database', 'icon-file-openoffice'),

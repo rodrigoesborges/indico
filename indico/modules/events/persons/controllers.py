@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -45,7 +45,7 @@ from indico.modules.logs import LogKind
 from indico.modules.users.models.affiliations import Affiliation
 from indico.util.date_time import now_utc
 from indico.util.i18n import _, ngettext
-from indico.util.marshmallow import LowercaseString, not_empty, validate_with_message
+from indico.util.marshmallow import LowercaseString, no_relative_urls, not_empty, validate_with_message
 from indico.util.placeholders import get_sorted_placeholders, replace_placeholders
 from indico.util.user import principal_from_identifier
 from indico.web.args import use_args, use_kwargs
@@ -79,8 +79,7 @@ class RHPersonsBase(RHManageEventBase):
                                selected=person_link.contribution.friendly_id)}
 
     def generate_subcontributions_data(self, person_link):
-        return {'title': '{} ({})'.format(person_link.subcontribution.contribution.title,
-                                          person_link.subcontribution.title),
+        return {'title': f'{person_link.subcontribution.contribution.title} ({person_link.subcontribution.title})',
                 'url': url_for('contributions.manage_contributions', self.event,
                                selected=person_link.subcontribution.contribution.friendly_id)}
 
@@ -335,7 +334,7 @@ class RHAPIEmailEventPersonsMetadata(RHEmailEventPersonsBase):
 class RHAPIEmailEventPersonsSend(RHEmailEventPersonsBase):
     @use_kwargs({
         'from_address': fields.String(required=True, validate=not_empty),
-        'body': fields.String(required=True, validate=not_empty),
+        'body': fields.String(required=True, validate=[not_empty, no_relative_urls]),
         'subject': fields.String(required=True, validate=not_empty),
         'bcc_addresses': fields.List(LowercaseString(validate=validate.Email())),
         'copy_for_sender': fields.Bool(load_default=False),

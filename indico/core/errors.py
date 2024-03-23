@@ -1,13 +1,11 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
-"""
-Module containing the Indico exception class hierarchy
-"""
+"""Module containing the Indico exception class hierarchy."""
 
 from werkzeug.exceptions import BadRequest, Forbidden, HTTPException, NotFound
 
@@ -71,4 +69,5 @@ class UserValueError(NoReportError):
     This behaves basically like NoReportError but it comes with
     a 400 status code instead of the usual 500 code.
     """
+
     http_status_code = 400

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -47,4 +47,4 @@ class InvitationLinkPlaceholder(Placeholder):
     @classmethod
     def render(cls, invitation, **kwargs):
         url = url_for('.display_regform', invitation.locator.uuid, _external=True)
-        return Markup('<a href="{0}">{0}</a>'.format(url))
+        return Markup(f'<a href="{url}">{url}</a>')

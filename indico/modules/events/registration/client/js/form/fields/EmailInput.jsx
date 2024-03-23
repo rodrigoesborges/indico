@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -22,15 +22,19 @@ import {getStaticData} from '../selectors';
 
 import '../../../styles/regform.module.scss';
 
-export default function EmailInput({htmlName, disabled, isRequired}) {
+export default function EmailInput({htmlId, htmlName, disabled, isRequired}) {
   const isMainEmailField = htmlName === 'email';
   const [message, setMessage] = useState({status: '', message: '', forEmail: ''});
   const isUpdateMode = useSelector(getUpdateMode);
   const {eventId, regformId, registrationUuid, management} = useSelector(getStaticData);
-  const url = useMemo(() => validateEmailURL({event_id: eventId, reg_form_id: regformId}), [
-    eventId,
-    regformId,
-  ]);
+  const invitationToken = useMemo(() => new URLSearchParams(location.search).get('invitation'), []);
+  const url = useMemo(() => {
+    const params = {event_id: eventId, reg_form_id: regformId};
+    if (invitationToken) {
+      params.invitation = invitationToken;
+    }
+    return validateEmailURL(params);
+  }, [eventId, regformId, invitationToken]);
   const validateEmail = useDebouncedAsyncValidate(async email => {
     let msg, response;
     email = email.trim();
@@ -120,6 +124,7 @@ export default function EmailInput({htmlName, disabled, isRequired}) {
   return (
     <FinalInput
       type="email"
+      id={htmlId}
       name={htmlName}
       required={isRequired && isMainEmailField ? 'no-validator' : isRequired}
       disabled={disabled}
@@ -145,6 +150,7 @@ export default function EmailInput({htmlName, disabled, isRequired}) {
 }
 
 EmailInput.propTypes = {
+  htmlId: PropTypes.string.isRequired,
   htmlName: PropTypes.string.isRequired,
   disabled: PropTypes.bool,
   isRequired: PropTypes.bool.isRequired,

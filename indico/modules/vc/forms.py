@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -23,18 +23,20 @@ from indico.web.forms.base import IndicoForm, generated_data
 from indico.web.forms.fields import EmailListField, IndicoDateField, IndicoRadioField
 from indico.web.forms.fields.principals import PrincipalListField
 from indico.web.forms.validators import Exclusive, UsedIf
-from indico.web.forms.widgets import JinjaWidget, RemoteDropdownWidget, SwitchWidget
+from indico.web.forms.widgets import DropdownWidget, JinjaWidget, SwitchWidget
 
 
 class VCRoomField(HiddenField):
-    widget = RemoteDropdownWidget(min_trigger_length=3)
+    widget = DropdownWidget(min_trigger_length=3)
 
     def process_formdata(self, valuelist):
         if valuelist and valuelist[0].isdigit():
             self.data = VCRoom.get(valuelist[0])
 
-    def _value(self):
-        return self.data.id if self.data is not None else None
+    def _value(self, for_react=False):
+        if not self.data:
+            return None
+        return [{'id': self.data.id}] if for_react else self.data.id
 
 
 class LinkingWidget(JinjaWidget):
@@ -94,8 +96,8 @@ class VCRoomLinkFormBase(IndicoForm):
         block_choices = [(block.id, '{} ({})'.format(block.full_title,
                                                      format_datetime(block.start_dt, timezone=self.event.tzinfo)))
                          for block in sorted(blocks, key=attrgetter('full_title', 'start_dt'))]
-        self.contribution.choices = [('', _('Please select a contribution'))] + contrib_choices
-        self.block.choices = [('', _('Please select a session block'))] + block_choices
+        self.contribution.choices = [('', _('Please select a contribution')), *contrib_choices]
+        self.block.choices = [('', _('Please select a session block')), *block_choices]
 
 
 class VCRoomAttachFormBase(VCRoomLinkFormBase):

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -13,7 +13,7 @@
 # XXX: keep `simple` on top; other modules may need fields from there (especially JSONField)
 from .simple import (EmailListField, HiddenFieldList, IndicoEmailRecipientsField, IndicoPasswordField, IndicoRadioField,
                      IndicoSelectMultipleCheckboxBooleanField, IndicoSelectMultipleCheckboxField, IndicoStaticTextField,
-                     IndicoTagListField, JSONField, TextListField)
+                     IndicoStrictKeywordsField, IndicoTagListField, JSONField, TextListField)
 
 from .colors import IndicoPalettePickerField, IndicoSinglePalettePickerField
 from .datetime import (IndicoDateField, IndicoDateTimeField, IndicoTimeField, IndicoTimezoneSelectField,
@@ -36,4 +36,4 @@ __all__ = ('IndicoSelectMultipleCheckboxField', 'IndicoRadioField', 'JSONField',
            'PrincipalListField', 'PrincipalField', 'AccessControlListField', 'IndicoQuerySelectMultipleField',
            'EditableFileField', 'IndicoQuerySelectMultipleCheckboxField', 'IndicoLocationField', 'IndicoMarkdownField',
            'IndicoDateField', 'IndicoProtectionField', 'IndicoSelectMultipleCheckboxBooleanField', 'RelativeDeltaField',
-           'IndicoWeekDayRepetitionField', 'IndicoEmailRecipientsField', 'IndicoTimeField')
+           'IndicoWeekDayRepetitionField', 'IndicoEmailRecipientsField', 'IndicoTimeField', 'IndicoStrictKeywordsField')

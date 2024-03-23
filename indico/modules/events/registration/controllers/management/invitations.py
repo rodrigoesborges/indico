@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -20,7 +20,7 @@ from indico.modules.events.registration.models.invitations import InvitationStat
 from indico.modules.events.registration.util import create_invitation, import_invitations_from_csv
 from indico.modules.events.registration.views import WPManageRegistration
 from indico.util.i18n import ngettext
-from indico.util.marshmallow import LowercaseString, not_empty
+from indico.util.marshmallow import LowercaseString, no_relative_urls, not_empty
 from indico.util.placeholders import get_sorted_placeholders, replace_placeholders
 from indico.web.args import use_kwargs
 from indico.web.flask.templating import get_template_module
@@ -81,10 +81,12 @@ class RHRegistrationFormInvite(RHManageRegFormBase):
         form_cls = InvitationFormExisting if request.args.get('existing') == '1' else InvitationFormNew
         form = form_cls(obj=defaults, regform=self.regform)
         skip_moderation = form.skip_moderation.data if 'skip_moderation' in form else False
+        skip_access_check = form.skip_access_check.data
         if form.validate_on_submit():
             for user in form.users.data:
-                create_invitation(self.regform, user, skip_moderation, form.email_from.data,
-                                  form.email_subject.data, form.email_body.data)
+                create_invitation(self.regform, user, form.email_from.data, form.email_subject.data,
+                                  form.email_body.data,
+                                  skip_moderation=skip_moderation, skip_access_check=skip_access_check)
             num = len(form.users.data)
             flash(ngettext('The invitation has been sent.',
                            '{n} invitations have been sent.',
@@ -98,7 +100,7 @@ class RHRegistrationFormRemindersSend(RHManageRegFormBase):
 
     @use_kwargs({
         'from_address': fields.String(required=True, validate=not_empty),
-        'body': fields.String(required=True, validate=not_empty),
+        'body': fields.String(required=True, validate=[not_empty, no_relative_urls]),
         'subject': fields.String(required=True, validate=not_empty),
         'bcc_addresses': fields.List(LowercaseString(validate=validate.Email())),
         'copy_for_sender': fields.Bool(load_default=False),
@@ -179,11 +181,14 @@ class RHRegistrationFormInviteImport(RHManageRegFormBase):
             defaults = FormDefaults(email_body=tpl.get_html_body(), email_subject=tpl.get_subject())
         form = ImportInvitationsForm(obj=defaults, regform=self.regform)
         skip_moderation = form.skip_moderation.data if 'skip_moderation' in form else False
+        skip_access_check = form.skip_access_check.data
         skip_existing = form.skip_existing.data
         if form.validate_on_submit():
             invitations, skipped = import_invitations_from_csv(self.regform, form.source_file.data,
                                                                form.email_from.data, form.email_subject.data,
-                                                               form.email_body.data, skip_moderation=skip_moderation,
+                                                               form.email_body.data,
+                                                               skip_moderation=skip_moderation,
+                                                               skip_access_check=skip_access_check,
                                                                skip_existing=skip_existing)
             sent = len(invitations)
             flash(self._format_flash_message(sent, skipped), 'success' if sent > 0 else 'warning')

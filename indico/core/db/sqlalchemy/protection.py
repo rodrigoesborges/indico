@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -244,8 +244,7 @@ class ProtectionMixin:
                 elif hasattr(parent, 'can_access'):
                     rv = parent.can_access(user, allow_admin=allow_admin)
                 else:
-                    raise TypeError('protection_parent of {} is of invalid type {} ({})'.format(self, type(parent),
-                                                                                                parent))
+                    raise TypeError(f'protection_parent of {self} is of invalid type {type(parent)} ({parent})')
         else:
             # should never happen, but since this is a sensitive area
             # we better fail loudly if we have garbage

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -85,6 +85,10 @@ class EditingFileType(db.Model):
     # relationship backrefs:
     # - files (EditingRevisionFile.file_type)
     # - review_conditions (EditingReviewCondition.file_types)
+
+    def log(self, *args, **kwargs):
+        """Log with prefilled metadata for the file type."""
+        return self.event.log(*args, meta={'editing_file_type_id': self.id}, **kwargs)
 
     def __repr__(self):
         return format_repr(self, 'id', 'event_id', 'extensions', allow_multiple_files=False, required=False,

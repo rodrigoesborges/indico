@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -17,7 +17,7 @@ from indico.modules.events.registration.models.registrations import PublishRegis
 from indico.util.i18n import _
 from indico.util.string import sanitize_email, validate_email
 from indico.web.forms.fields.util import is_preprocessed_formdata
-from indico.web.forms.widgets import HiddenInputs, JinjaWidget, PasswordWidget
+from indico.web.forms.widgets import DropdownWidget, HiddenInputs, JinjaWidget, PasswordWidget
 
 
 class IndicoSelectMultipleCheckboxField(SelectMultipleField):
@@ -44,7 +44,7 @@ class IndicoSelectMultipleCheckboxBooleanField(IndicoSelectMultipleCheckboxField
     def iter_choices(self):
         for value, label in self.choices:
             selected = self.data is not None and self.data.get(self.coerce(value))
-            yield (value, label, selected)
+            yield (value, label, selected, {})
 
 
 class IndicoButtonsBooleanField(BooleanField):
@@ -68,6 +68,10 @@ class JSONField(HiddenField):
     #: Whether an object may be populated with the data from this field
     CAN_POPULATE = False
 
+    def __init__(self, *args, empty_if_null=False, **kwargs):
+        self.empty_if_null = empty_if_null
+        super().__init__(*args, **kwargs)
+
     def process_formdata(self, valuelist):
         if is_preprocessed_formdata(valuelist):
             self.data = valuelist[0]
@@ -75,7 +79,7 @@ class JSONField(HiddenField):
             self.data = json.loads(valuelist[0])
 
     def _value(self):
-        return json.dumps(self.data)
+        return '' if self.data is None and self.empty_if_null else json.dumps(self.data)
 
     def populate_obj(self, obj, name):
         if self.CAN_POPULATE:
@@ -165,6 +169,21 @@ class IndicoEmailRecipientsField(Field):
         self.data = sorted(data, key=str.lower)
         self.text_value = ', '.join(data)
         self.count = len(data)
+
+
+class IndicoStrictKeywordsField(Field):
+    widget = DropdownWidget(allow_additions=False, multiple=True)
+
+    def __init__(self, *args, **kwargs):
+        self.serialized_choices = kwargs.pop('choices', [])
+        super().__init__(*args, **kwargs)
+
+    def process_formdata(self, valuelist):
+        super().process_formdata(valuelist)
+        self.data = sorted(json.loads(self.data))
+
+    def _value(self, for_react=False):
+        return [{'id': d, 'name': d} for d in self.data] if for_react else self.data
 
 
 class IndicoTagListField(HiddenFieldList):

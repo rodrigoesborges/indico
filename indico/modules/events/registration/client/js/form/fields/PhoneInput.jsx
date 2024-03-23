@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -12,11 +12,14 @@ import {FinalInput} from 'indico/react/forms';
 
 import '../../../styles/regform.module.scss';
 
-export default function PhoneInput({htmlName, isRequired, disabled}) {
-  return <FinalInput type="tel" name={htmlName} required={isRequired} disabled={disabled} />;
+export default function PhoneInput({htmlId, htmlName, isRequired, disabled}) {
+  return (
+    <FinalInput id={htmlId} type="tel" name={htmlName} required={isRequired} disabled={disabled} />
+  );
 }
 
 PhoneInput.propTypes = {
+  htmlId: PropTypes.string.isRequired,
   htmlName: PropTypes.string.isRequired,
   isRequired: PropTypes.bool.isRequired,
   disabled: PropTypes.bool,

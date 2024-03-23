@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -22,4 +22,10 @@ Called when an abstract is withdrawn. The *sender* is the abstract.
 
 abstract_updated = _signals.signal('abstract-updated', '''
 Called when an abstract is modified. The *sender* is the abstract.
+''')
+
+abstract_accepted = _signals.signal('abstract-accepted', '''
+Called when an abstract is accepted and a contribution is created.
+The *sender* is the abstract. The contribution is passed in the
+``contribution`` kwarg.
 ''')

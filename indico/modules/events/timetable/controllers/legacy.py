@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -78,8 +78,7 @@ class RHLegacyTimetableAddBreak(RHLegacyTimetableAddEntryBase):
         breaks = Break.query.filter(Break.timetable_entry.has(event=self.event)).all()
         common_colors = Counter(b.colors for b in breaks)
         most_common = common_colors.most_common(1)
-        colors = most_common[0][0] if most_common else get_random_color(self.event)
-        return colors
+        return most_common[0][0] if most_common else get_random_color(self.event)
 
     def _process(self):
         colors = self._get_default_colors()

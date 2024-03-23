@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -126,8 +126,12 @@
 }
 
 .list-filter {
-  padding-bottom: 14em;
   position: relative;
+
+  .list-filter-content {
+    max-height: 65vh;
+    overflow-y: auto;
+  }
 
   .list-column {
     @extend .flexrow;
@@ -222,7 +226,6 @@
     max-height: 12em;
     overflow: auto;
     min-width: 12em;
-    box-sizing: border-box;
 
     > li {
       @extend .flexrow;
@@ -238,9 +241,9 @@
   }
 
   > .bottom-buttons {
-    position: absolute;
-    bottom: 0;
-    right: 0;
+    display: flex;
+    justify-content: end;
+    padding-top: 15px;
   }
 }
 

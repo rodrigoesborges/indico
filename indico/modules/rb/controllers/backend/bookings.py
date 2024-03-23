@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -31,16 +31,18 @@ from indico.modules.rb.operations.bookings import (get_active_bookings, get_book
                                                    get_matching_events, get_room_calendar, get_rooms_availability,
                                                    has_same_slots, should_split_booking, split_booking)
 from indico.modules.rb.operations.suggestions import get_suggestions
-from indico.modules.rb.schemas import (CreateBookingSchema, reservation_details_schema,
+from indico.modules.rb.schemas import (CreateBookingSchema, ReservationOccurrenceLinkSchema, reservation_details_schema,
                                        reservation_linked_object_data_schema, reservation_occurrences_schema,
                                        reservation_user_event_schema)
-from indico.modules.rb.util import (generate_spreadsheet_from_occurrences, get_linked_object, get_prebooking_collisions,
+from indico.modules.rb.util import (WEEKDAYS, check_impossible_repetition, check_repeat_frequency,
+                                    generate_spreadsheet_from_occurrences, get_linked_object, get_prebooking_collisions,
                                     group_by_occurrence_date, is_booking_start_within_grace_period,
                                     serialize_availability, serialize_booking_details, serialize_occurrences)
 from indico.util.date_time import now_utc, utc_to_server
 from indico.util.i18n import _
+from indico.util.marshmallow import ModelField
 from indico.util.spreadsheets import send_csv, send_xlsx
-from indico.web.args import use_args, use_kwargs
+from indico.web.args import use_args, use_kwargs, use_rh_args
 from indico.web.flask.util import url_for
 from indico.web.util import ExpectedError
 
@@ -62,6 +64,7 @@ class RHTimeline(RHRoomBookingBase):
         'end_dt': fields.DateTime(required=True),
         'repeat_frequency': EnumField(RepeatFrequency, load_default='NEVER'),
         'repeat_interval': fields.Int(load_default=1),
+        'recurrence_weekdays': fields.List(fields.Str(validate=validate.OneOf(WEEKDAYS)), load_default=None),
         'skip_conflicts_with': fields.List(fields.Int(), load_default=None),
         'admin_override_enabled': fields.Bool(load_default=False)
     }, location='query')
@@ -85,7 +88,7 @@ class RHTimeline(RHRoomBookingBase):
             availability = serialized[self.room.id]
         else:
             # keep order of original room id list
-            availability = sorted(list(serialized.items()), key=lambda x: room_ids.index(x[0]))
+            availability = sorted(serialized.items(), key=lambda x: room_ids.index(x[0]))
         return jsonify(availability=availability, date_range=date_range)
 
 
@@ -141,7 +144,7 @@ class RHCreateBooking(RHRoomBookingBase):
 
     def _check_access(self):
         RHRoomBookingBase._check_access(self)
-        if (self.prebook and not self.room.can_prebook(session.user) or
+        if ((self.prebook and not self.room.can_prebook(session.user)) or
                 (not self.prebook and not self.room.can_book(session.user))):
             raise Forbidden('Not authorized to book this room')
 
@@ -155,7 +158,8 @@ class RHCreateBooking(RHRoomBookingBase):
         obj = get_linked_object(type_, id_)
         if obj is None or not obj.event.can_manage(session.user):
             return
-        booking.linked_object = obj
+        for occurrence in booking.occurrences:
+            occurrence.linked_object = obj
         if link_back:
             obj.inherit_location = False
             obj.room = self.room
@@ -282,14 +286,25 @@ class RHLinkedObjectData(RHRoomBookingBase):
         return jsonify(can_access=True, **reservation_linked_object_data_schema.dump(self.linked_object))
 
 
+class RHBookingLinksData(RHRoomBookingBase):
+    """Fetch details of objects linked to a booking."""
+
+    @use_kwargs({'booking': ModelField(Reservation, required=True, data_key='booking_id')}, location='view_args')
+    def _process(self, booking: Reservation):
+        return ReservationOccurrenceLinkSchema(many=True).jsonify(booking.links)
+
+
 class RHBookingEditCalendars(RHBookingBase):
     @use_kwargs({
         'start_dt': fields.DateTime(required=True),
         'end_dt': fields.DateTime(required=True),
         'repeat_frequency': EnumField(RepeatFrequency, load_default='NEVER'),
         'repeat_interval': fields.Int(load_default=1),
+        'recurrence_weekdays': fields.List(fields.Str(validate=validate.OneOf(WEEKDAYS)), load_default=None)
     }, location='query')
     def _process(self, **kwargs):
+        check_impossible_repetition(kwargs)
+        check_repeat_frequency(self.booking.repeat_frequency, kwargs['repeat_frequency'])
         return jsonify(get_booking_edit_calendar_data(self.booking, kwargs))
 
 
@@ -299,20 +314,20 @@ class RHUpdateBooking(RHBookingBase):
         if not self.booking.can_edit(session.user):
             raise Forbidden
 
-    @use_args(CreateBookingSchema)
+    @use_rh_args(CreateBookingSchema)
     def _process(self, args):
         room = self.booking.room
 
-        # XXX this is a bit of an ugly hack: usually it's checked in the reservation create/update code
-        # whether internal notes are enabled and the user can touch them. but when splitting we need to
+        # XXX: This is a bit of an ugly hack: usually it's checked in the reservation create/update code
+        # whether internal notes are enabled and the user can touch them. But when splitting we need to
         # create a new booking and want to preserve internal notes regardless of whether the user who does
-        # the splitting is allowed to manage them or not. however, if the user does have access to internal
+        # the splitting is allowed to manage them or not. However, if the user does have access to internal
         # notes, we want to allow them to change it as well.
         if (
             not rb_settings.get('internal_notes_enabled') or
             not room.can_manage(session.user, allow_admin=args['admin_override_enabled'])
         ):
-            # remove the user-provided note (we fall back to the one from the xisting booking below)
+            # remove the user-provided note (we fall back to the one from the existing booking below)
             args.pop('internal_note', None)
 
         new_booking_data = {
@@ -323,7 +338,10 @@ class RHUpdateBooking(RHBookingBase):
             'end_dt': args['end_dt'],
             'repeat_frequency': args['repeat_frequency'],
             'repeat_interval': args['repeat_interval'],
+            'recurrence_weekdays': args['recurrence_weekdays'],
         }
+
+        check_repeat_frequency(self.booking.repeat_frequency, new_booking_data['repeat_frequency'])
 
         additional_booking_attrs = {}
         if not should_split_booking(self.booking, new_booking_data):
@@ -366,9 +384,10 @@ class RHMatchingEvents(RHRoomBookingBase):
         'end_dt': fields.DateTime(),
         'repeat_frequency': EnumField(RepeatFrequency, load_default='NEVER'),
         'repeat_interval': fields.Int(load_default=1),
+        'recurrence_weekdays': fields.List(fields.Str(validate=validate.OneOf(WEEKDAYS)), load_default=None)
     }, location='query')
-    def _process(self, start_dt, end_dt, repeat_frequency, repeat_interval):
-        events = get_matching_events(start_dt, end_dt, repeat_frequency, repeat_interval)
+    def _process(self, start_dt, end_dt, repeat_frequency, repeat_interval, recurrence_weekdays):
+        events = get_matching_events(start_dt, end_dt, repeat_frequency, repeat_interval, recurrence_weekdays)
         return jsonify(reservation_user_event_schema.dump(events))
 
 

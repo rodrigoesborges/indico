@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -51,7 +51,7 @@ class IndicoModelConverter(ModelConverter):
     def fields_for_model(self, model, *args, **kwargs):
         # Look up aliases on all classes in the inheritance chain of
         # the model so mixins can define their own aliases if needed.
-        def _get_from_mro(attr, key, default=None, _mro=getmro(model)):
+        def _get_from_mro(attr, key, default=None, _mro=getmro(model)):  # noqa: B008
             for cls in _mro:
                 try:
                     return getattr(cls, attr, {})[key]

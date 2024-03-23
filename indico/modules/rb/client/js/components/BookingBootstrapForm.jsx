@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -31,6 +31,7 @@ import {selectors as userSelectors} from '../common/user';
 import {sanitizeRecurrence} from '../util';
 
 import TimeRangePicker from './TimeRangePicker';
+import WeekdayRecurrencePicker from './WeekdayRecurrencePicker';
 
 import './BookingBootstrapForm.module.scss';
 
@@ -80,6 +81,7 @@ class BookingBootstrapForm extends React.Component {
           type: 'single',
           number: 1,
           interval: 'week',
+          weekdays: [],
         },
         dates: {
           startDate: startsNextDay ? moment().add(1, 'd') : moment(),
@@ -97,6 +99,34 @@ class BookingBootstrapForm extends React.Component {
   componentDidMount() {
     this.triggerChange();
   }
+
+  componentDidUpdate() {
+    const {recurrence} = this.state;
+    if (
+      recurrence.type === 'every' &&
+      recurrence.interval === 'week' &&
+      recurrence.weekdays.length === 0
+    ) {
+      this.preselectWeekday();
+    }
+  }
+
+  updateIntervalOptions = () => {
+    const {hideOptions} = this.props;
+    const {recurrence} = this.state;
+
+    if (!hideOptions.recurringWeekly && !hideOptions.recurringMonthly) {
+      return null;
+    }
+
+    if (hideOptions.recurringWeekly && recurrence.interval !== 'month') {
+      this.updateInterval('month');
+    }
+
+    if (hideOptions.recurringMonthly && recurrence.interval !== 'week') {
+      this.updateInterval('week');
+    }
+  };
 
   triggerChange() {
     const {onChange} = this.props;
@@ -119,9 +149,9 @@ class BookingBootstrapForm extends React.Component {
 
   updateBookingType = newType => {
     const {
-      recurrence: {number, interval},
+      recurrence: {number, interval, weekdays},
     } = this.state;
-    const newState = {...this.state, recurrence: {type: newType, number, interval}};
+    const newState = {...this.state, recurrence: {type: newType, number, interval, weekdays}};
     sanitizeRecurrence(newState);
     this.setState(newState, () => {
       this.triggerChange();
@@ -130,12 +160,12 @@ class BookingBootstrapForm extends React.Component {
 
   updateNumber = number => {
     const {
-      recurrence: {type, interval},
+      recurrence: {type, interval, weekdays},
     } = this.state;
     this.setState({number});
     this.setState(
       {
-        recurrence: {type, number: parseInt(number, 10), interval},
+        recurrence: {type, number: parseInt(number, 10), interval, weekdays},
       },
       () => {
         this.triggerChange();
@@ -145,11 +175,15 @@ class BookingBootstrapForm extends React.Component {
 
   updateInterval = interval => {
     const {
-      recurrence: {type, number},
+      recurrence: {type, number, weekdays},
     } = this.state;
+
+    // Clear weekdays if interval is changed to month
+    const updatedWeekdays = interval === 'month' ? [] : weekdays;
+
     this.setState(
       {
-        recurrence: {type, number, interval},
+        recurrence: {type, number, interval, weekdays: updatedWeekdays},
       },
       () => {
         this.triggerChange();
@@ -171,6 +205,20 @@ class BookingBootstrapForm extends React.Component {
     );
   };
 
+  updateRecurrenceWeekdays = selectedDays => {
+    const {
+      recurrence: {type, number, interval},
+    } = this.state;
+    this.setState(
+      {
+        recurrence: {type, number, interval, weekdays: selectedDays},
+      },
+      () => {
+        this.triggerChange();
+      }
+    );
+  };
+
   get serializedState() {
     const {dayBased} = this.props;
     const {
@@ -185,6 +233,7 @@ class BookingBootstrapForm extends React.Component {
         startDate: serializeDate(startDate),
         endDate: serializeDate(endDate),
       },
+      weekdays: recurrence.weekdays,
     };
 
     if (!dayBased) {
@@ -202,10 +251,48 @@ class BookingBootstrapForm extends React.Component {
     e.preventDefault();
   };
 
+  preselectWeekday = () => {
+    const {recurrence} = this.state;
+    const weekdayToday = moment()
+      .locale('en')
+      .format('ddd')
+      .toLocaleLowerCase();
+
+    if (recurrence.weekdays.includes(weekdayToday)) {
+      return;
+    }
+
+    const weekdays = [...recurrence.weekdays, weekdayToday];
+    this.setState({recurrence: {...recurrence, weekdays}});
+    this.triggerChange();
+  };
+
+  getRecurrenceOptions = () => {
+    const {hideOptions} = this.props;
+    const {recurrence} = this.state;
+
+    if (hideOptions.recurringWeekly && hideOptions.recurringMonthly) {
+      return null;
+    }
+
+    if (hideOptions.recurringWeekly) {
+      return [{text: PluralTranslate.string('Month', 'Months', recurrence.number), value: 'month'}];
+    }
+
+    if (hideOptions.recurringMonthly) {
+      return [{text: PluralTranslate.string('Week', 'Weeks', recurrence.number), value: 'week'}];
+    }
+
+    return [
+      {text: PluralTranslate.string('Week', 'Weeks', recurrence.number), value: 'week'},
+      {text: PluralTranslate.string('Month', 'Months', recurrence.number), value: 'month'},
+    ];
+  };
+
   render() {
     const {
       timeSlot: {startTime, endTime},
-      recurrence: {type, number, interval},
+      recurrence: {type, number, interval, weekdays},
       dates: {startDate, endDate},
     } = this.state;
 
@@ -223,10 +310,6 @@ class BookingBootstrapForm extends React.Component {
       isAdminOverrideEnabled,
       bookingGracePeriod
     );
-    const recurrenceOptions = [
-      {text: PluralTranslate.string('Week', 'Weeks', number), value: 'week'},
-      {text: PluralTranslate.string('Month', 'Months', number), value: 'month'},
-    ];
     // all but one option are hidden
     const showRecurrenceOptions =
       ['single', 'daily', 'recurring'].filter(x => hideOptions[x]).length !== 2;
@@ -235,6 +318,7 @@ class BookingBootstrapForm extends React.Component {
       isAdminOverrideEnabled,
       bookingGracePeriod
     );
+    const recurrenceHidden = hideOptions.recurringWeekly && hideOptions.recurringMonthly;
 
     return (
       <Form>
@@ -258,7 +342,7 @@ class BookingBootstrapForm extends React.Component {
                 onChange={(e, {value}) => this.updateBookingType(value)}
               />
             )}
-            {!hideOptions.recurring && (
+            {!recurrenceHidden && (
               <Form.Radio
                 label={Translate.string('Recurring booking')}
                 name="type"
@@ -280,11 +364,17 @@ class BookingBootstrapForm extends React.Component {
               step="1"
               onChange={(event, data) => this.updateNumber(data.value)}
             />
-            <Select
-              value={interval}
-              options={recurrenceOptions}
-              onChange={(event, data) => this.updateInterval(data.value)}
-            />
+            {hideOptions.recurringWeekly || hideOptions.recurringMonthly ? (
+              <label>{this.getRecurrenceOptions().map(x => x.text)}</label>
+            ) : (
+              <Select
+                value={interval}
+                options={this.getRecurrenceOptions()}
+                disabled={recurrenceHidden}
+                onChange={(event, data) => this.updateInterval(data.value)}
+              />
+            )}
+            {this.updateIntervalOptions()}
           </Form.Group>
         )}
         {['every', 'daily'].includes(type) && (
@@ -304,6 +394,8 @@ class BookingBootstrapForm extends React.Component {
           <Form.Group inline>
             <SingleDatePicker
               date={startDate}
+              yearsBefore={0}
+              yearsAfter={1}
               onDateChange={date => this.updateDates(date, null)}
               disabledDate={dt => {
                 return !isBookingStartDateValid(dt, isAdminOverrideEnabled, bookingGracePeriod);
@@ -320,6 +412,12 @@ class BookingBootstrapForm extends React.Component {
               onChange={this.updateTimes}
               minTime={minTime}
             />
+          </Form.Group>
+        )}
+        {type === 'every' && interval === 'week' && (
+          <Form.Group inline style={{marginLeft: '1em', marginRight: '1em'}}>
+            <Translate as="label">Recurring every</Translate>
+            <WeekdayRecurrencePicker onChange={this.updateRecurrenceWeekdays} value={weekdays} />
           </Form.Group>
         )}
         {children}

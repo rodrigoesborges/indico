@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -51,7 +51,8 @@ class RHConfig(RHRoomBookingBase):
                        has_tos=bool(tos_url or tos_html),
                        tos_html=tos_html,
                        has_privacy_policy=bool(privacy_policy_url or privacy_policy_html),
-                       privacy_policy_html=privacy_policy_html)
+                       privacy_policy_html=privacy_policy_html,
+                       booking_reason_required=rb_settings.get('booking_reason_required').name)
 
 
 class RHNotificationSettings(RHRoomBookingBase):
@@ -99,12 +100,12 @@ class RHStats(RHRoomBookingBase):
                                                    'start_dt', today_dt,
                                                    'end_dt', today_dt + timedelta(days=1)))
                           .count())
-        return dict(
-            active_rooms=Room.query.filter_by(is_deleted=False).count(),
-            buildings=Room.query.distinct(Room.building).filter_by(is_deleted=False).count(),
-            pending_bookings=Reservation.query.filter(Reservation.is_pending, ~Reservation.is_archived).count(),
-            bookings_today=bookings_today
-        )
+        return {
+            'active_rooms': Room.query.filter_by(is_deleted=False).count(),
+            'buildings': Room.query.distinct(Room.building).filter_by(is_deleted=False).count(),
+            'pending_bookings': Reservation.query.filter(Reservation.is_pending, ~Reservation.is_archived).count(),
+            'bookings_today': bookings_today
+        }
 
 
 class RHMapAreas(RHRoomBookingBase):

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -17,9 +17,6 @@ from indico.web.flask.util import make_view_func
 from indico.web.rh import RH, allow_signed_url, custom_auth, oauth_scope
 from indico.web.util import (_check_request_user, _lookup_request_user, _request_likely_seen_by_user, get_oauth_user,
                              get_request_user, is_legacy_signed_url_valid, signed_url_for_user, verify_signed_user_url)
-
-
-pytest_plugins = 'indico.core.oauth.testing.fixtures'
 
 
 @pytest.mark.parametrize(('url', 'valid'), (

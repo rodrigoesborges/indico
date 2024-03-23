@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -46,8 +46,7 @@ def make_format_event_date_func(category):
         start_dt = event.start_dt.astimezone(tzinfo)
         end_dt = event.end_dt.astimezone(tzinfo)
         if start_dt.year != end_dt.year:
-            return '{} - {}'.format(format_date(start_dt, timezone=tzinfo),
-                                    format_date(end_dt, timezone=tzinfo))
+            return f'{format_date(start_dt, timezone=tzinfo)} - {format_date(end_dt, timezone=tzinfo)}'
         elif (start_dt.month != end_dt.month) or (start_dt.day != end_dt.day):
             return '{} - {}'.format(format_skeleton(start_dt, day_month, timezone=tzinfo),
                                     format_skeleton(end_dt, day_month, timezone=tzinfo))
@@ -87,8 +86,9 @@ def get_category_view_params(category, now, is_flat=False):
 
     # Current events, which are always shown by default are events of this month and of the previous month.
     # If there are no events in this range, it will include the last and next month containing events.
+
     past_threshold = now - relativedelta(months=1, day=1, hour=0, minute=0)
-    future_threshold = now + relativedelta(months=1, day=1, hour=0, minute=0)
+    future_threshold = now + relativedelta(months=category.show_future_months+1, day=1, hour=0, minute=0)
 
     hidden_event_ids = {e.id for e in category.get_hidden_events(user=session.user)} if not is_flat else set()
     event_query_filter = get_event_query_filter(category, is_flat=is_flat, hidden_event_ids=hidden_event_ids)

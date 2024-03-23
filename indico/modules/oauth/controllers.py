@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -30,10 +30,11 @@ from indico.modules.users.controllers import RHUserBase
 from indico.util.i18n import _
 from indico.web.flask.util import url_for
 from indico.web.forms.base import FormDefaults
-from indico.web.rh import RH, RHProtected
+from indico.web.rh import RH, RHProtected, cors
 from indico.web.util import jsonify_data, jsonify_form
 
 
+@cors
 class RHOAuthMetadata(RH):
     """Return RFC8414 Authorization Server Metadata."""
 
@@ -98,14 +99,12 @@ class RHOAuthAuthorize(RHProtected):
                                new_scopes=[_f for _f in [SCOPES.get(s) for s in new_scopes] if _f])
 
 
+@cors
 class RHOAuthToken(RH):
     CSRF_ENABLED = False
 
     def _process(self):
-        resp = auth_server.create_token_response()
-        resp.headers['Access-Control-Allow-Methods'] = 'POST'
-        resp.headers['Access-Control-Allow-Origin'] = '*'
-        return resp
+        return auth_server.create_token_response()
 
 
 class RHOAuthIntrospect(RH):
@@ -132,6 +131,7 @@ class RHOAuthAdmin(RHAdminBase):
 
 class RHOAuthAdminApplicationBase(RHAdminBase):
     """Base class for single OAuth application RHs."""
+
     def _process_args(self):
         self.application = OAuthApplication.get_or_404(request.view_args['id'])
 
@@ -237,7 +237,7 @@ class RHOAuthUserAppRevoke(RHUserBase):
 
 
 class RHPersonalTokensUserBase(RHUserBase):
-    """Base class for personal token management"""
+    """Base class for personal token management."""
 
     allow_system_user = True
 

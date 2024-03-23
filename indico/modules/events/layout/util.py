@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -96,6 +96,7 @@ class MenuEntryData:
     :param url_kwargs: dict -- Additional data passed to ``url_for``
         when building the url the menu item points to.
     """
+
     plugin = None
 
     def __init__(self, title, name, endpoint=None, position=-1, is_enabled=True, visible=None, parent=None,
@@ -134,10 +135,10 @@ def _get_split_signal_entries():
                                          key=lambda name_data: _menu_entry_key(name_data[1]))
                 if not data.parent}
     child_data = defaultdict(list)
-    for name, data in signal_entries.items():
+    for data in signal_entries.values():
         if data.parent is not None:
             child_data[data.parent].append(data)
-    for parent, entries in child_data.items():
+    for entries in child_data.values():
         entries.sort(key=_menu_entry_key)
     return top_data, child_data
 

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -86,7 +86,7 @@ def find_latest_entry_end_dt(obj, day=None):
             raise ValueError('Day specified for session block.')
         entries = obj.timetable_entry.children
     else:
-        raise ValueError(f'Invalid object type {type(obj)}')
+        raise TypeError(f'Invalid object type {type(obj)}')
     return max(entries, key=attrgetter('end_dt')).end_dt if entries else None
 
 
@@ -117,7 +117,7 @@ def find_next_start_dt(duration, obj, day=None, force=False):
         earliest_dt = obj.timetable_entry.start_dt
         latest_dt = obj.timetable_entry.end_dt
     else:
-        raise ValueError(f'Invalid object type {type(obj)}')
+        raise TypeError(f'Invalid object type {type(obj)}')
     max_duration = latest_dt - earliest_dt
     if duration > max_duration:
         return earliest_dt if force else None
@@ -130,25 +130,24 @@ def find_next_start_dt(duration, obj, day=None, force=False):
 
 def get_category_timetable(categ_ids, start_dt, end_dt, detail_level='event', tz=utc, from_categ=None, grouped=True,
                            includible=lambda item: True):
-    """Retrieve time blocks that fall within a specific time interval
-       for a given set of categories.
+    """Retrieve time blocks that fall within a specific time interval for a given set of categories.
 
-       :param categ_ids: iterable containing list of category IDs
-       :param start_dt: start of search interval (``datetime``, expected
-                        to be in display timezone)
-       :param end_dt: end of search interval (``datetime`` in expected
-                      to be in display timezone)
-       :param detail_level: the level of detail of information
-                            (``event|session|contribution``)
-       :param tz: the ``timezone`` information should be displayed in
-       :param from_categ: ``Category`` that will be taken into account to calculate
-                          visibility
-       :param grouped: Whether to group results by start date
-       :param includible: a callable, to allow further arbitrary custom filtering (maybe from 3rd
-                          party plugins) on whether to include (returns True) or not (returns False)
-                          each ``detail`` item. Default always returns True.
-       :returns: a dictionary containing timetable information in a
-                 structured way. See source code for examples.
+    :param categ_ids: iterable containing list of category IDs
+    :param start_dt: start of search interval (``datetime``, expected
+                     to be in display timezone)
+    :param end_dt: end of search interval (``datetime`` in expected
+                   to be in display timezone)
+    :param detail_level: the level of detail of information
+                         (``event|session|contribution``)
+    :param tz: the ``timezone`` information should be displayed in
+    :param from_categ: ``Category`` that will be taken into account to calculate
+                       visibility
+    :param grouped: Whether to group results by start date
+    :param includible: a callable, to allow further arbitrary custom filtering (maybe from 3rd
+                       party plugins) on whether to include (returns True) or not (returns False)
+                       each ``detail`` item. Default always returns True.
+    :returns: a dictionary containing timetable information in a
+              structured way. See source code for examples.
     """
     day_start = start_dt.astimezone(utc)
     day_end = end_dt.astimezone(utc)

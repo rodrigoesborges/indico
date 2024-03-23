@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -18,8 +18,8 @@ from indico.util.i18n import _
 from indico.util.placeholders import get_missing_placeholders, render_placeholder_info
 from indico.web.forms.base import IndicoForm
 from indico.web.forms.fields import EmailListField, FileField, IndicoDateTimeField
-from indico.web.forms.validators import HiddenUnless, LinkedDateTime, UsedIf, ValidationError
-from indico.web.forms.widgets import CKEditorWidget, SwitchWidget
+from indico.web.forms.validators import HiddenUnless, LinkedDateTime, NoRelativeURLs, UsedIf, ValidationError
+from indico.web.forms.widgets import SwitchWidget, TinyMCEWidget
 
 
 class SurveyForm(IndicoForm):
@@ -114,7 +114,7 @@ class ImportQuestionnaireForm(IndicoForm):
 class InvitationForm(IndicoForm):
     from_address = SelectField(_('From'), [DataRequired()])
     subject = StringField(_('Subject'), [DataRequired()])
-    body = TextAreaField(_('Email body'), [DataRequired()], widget=CKEditorWidget())
+    body = TextAreaField(_('Email body'), [DataRequired(), NoRelativeURLs()], widget=TinyMCEWidget(absolute_urls=True))
     recipients = EmailListField(_('Recipients'), [DataRequired()], description=_('One email address per line.'))
     copy_for_sender = BooleanField(_('Send copy to me'), widget=SwitchWidget())
     submitted = HiddenField()

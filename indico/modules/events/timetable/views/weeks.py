@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -56,7 +56,7 @@ def inject_week_timetable(event, days, tz_name, tpl='events/timetable/display/_w
     for week in week_table_shallow:
         # Build list of time slots that are used this week
         time_slots = set()
-        for day, entries in week:
+        for _day, entries in week:
             time_slots.update(_localized_time(x.start_dt, tz) for x in entries)
 
         # Build each day with its contributions and placeholders

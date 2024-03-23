@@ -60,17 +60,25 @@ You can also consult the official
 
 Navigate to ``~/dev/indico/src`` (assuming you used the standard locations from the dev setup guide).
 
-Run ``tx pull -f -l <language_code>``.
+Run ``indico i18n pull indico <language_code>``.
 Languages codes can be obtained `here <https://www.transifex.com/indico/>`_.
 
 For example, Chinese (China) is ``zh_CN.GB2312``.
 
-5. Compile translations and run Indico
+5. Check the translations
+-------------------------
+
+Run ``indico i18n check-format-strings`` to make sure that all placeholders in the
+translated strings match.
+
+If this command finds any issues, we recommend fixing the translations in Transifex and
+reinstalling the updated translations before proceeding to the next step. Otherwise,
+this could to lead to errors when Indico tries to use the translated string.
+
+6. Compile translations and run Indico
 --------------------------------------
 
-Run the commands ``indico i18n compile-catalog``
-and ``indico i18n compile-catalog-react``
-and:
+Run the command ``indico i18n compile indico`` and:
 
 - :ref:`launch Indico <run-dev>`, or
 - :ref:`build <building>` and :ref:`deploy your own version of Indico <install-prod>`,
@@ -119,7 +127,7 @@ is available from github (slightly outdated and we should eventually move it to 
 It describes the interface between translating and programming and some conventions to be followed.
 Everyone involved in translating or programming Indico should have read it before starting the work.
 
-Whenever translaters spot difficult code (forgotten pluralization, typos), they
+Whenever translators spot difficult code (forgotten pluralization, typos), they
 should do their best to avoid double (or rather: multiple) work to their fellow translators.
 What is a problem for their translation, usually will be a problem for all translations.
 Don't hesitate to open an issue or pull request on `GitHub <https://github.com/indico/indico>`_.

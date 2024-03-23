@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -47,7 +47,6 @@ form {
 
 .i-form {
   @include font-family-form();
-  box-sizing: border-box;
   max-width: 800px;
   display: block;
   font-size: 1em;
@@ -249,7 +248,7 @@ form {
     }
   }
 
-  button,
+  button:not(.tox-tbtn),
   input[type='button'],
   input[type='submit'] {
     @include form-field-button();

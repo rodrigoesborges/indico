@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -27,7 +27,6 @@ export function EmailContribAbstractRoles({context, metadataURL, previewURL, sen
 
   const handleSubmit = async data => {
     const requestData = {...data, ...context};
-    requestData.body = requestData.body.getData ? requestData.body.getData() : requestData.body;
     let resp;
     try {
       resp = await indicoAxios.post(sendURL, requestData);

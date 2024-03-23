@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -34,13 +34,12 @@ from indico.web.util import jsonify_data
 
 
 def _get_start_dt(obj):
-    # TODO: adapt to new models (needs extra properties to use event TZ)
     if isinstance(obj, Contribution):
         return obj.timetable_entry.start_dt if obj.timetable_entry else None
     elif isinstance(obj, SubContribution):
         return obj.timetable_entry.start_dt if obj.timetable_entry else None
     elif isinstance(obj, Session):
-        return None
+        return obj.start_dt  # start_dt of the first block
     return obj.start_dt
 
 
@@ -162,7 +161,7 @@ class AttachmentPackageGeneratorMixin(ZipGeneratorMixin):
                 else:
                     time = format_time(start_date, format='HHmm', timezone=self.event.timezone)
                     paths.append(secure_filename(f'{time}_{obj.title}', ''))
-            else:
+            else:  # noqa: PLR5501
                 if isinstance(obj, SubContribution):
                     paths.append(secure_filename(f'{obj.position}_{obj.title}', str(obj.id)))
                 else:

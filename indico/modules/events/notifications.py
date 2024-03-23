@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -88,7 +88,6 @@ def notify_move_request_closure(move_requests, accept, reason=''):
     :param accept: Whether the requests were accepted.
     :param reason: Optional reason for rejection.
     """
-
     move_requests = sorted(move_requests, key=attrgetter('requestor.id', 'category.id'))
     for (requestor, category), requests in itertools.groupby(move_requests, attrgetter('requestor', 'category')):
         events = [rq.event for rq in requests]

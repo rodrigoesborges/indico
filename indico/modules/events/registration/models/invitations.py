@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -26,9 +26,10 @@ class InvitationState(RichIntEnum):
 
 class RegistrationInvitation(db.Model):
     """An invitation for someone to register."""
+
     __tablename__ = 'invitations'
-    __table_args__ = (db.CheckConstraint('(state = {state}) OR (registration_id IS NULL)'
-                                         .format(state=InvitationState.accepted), name='registration_state'),
+    __table_args__ = (db.CheckConstraint(f'(state = {InvitationState.accepted}) OR (registration_id IS NULL)',
+                                         name='registration_state'),
                       db.UniqueConstraint('registration_form_id', 'email'),
                       {'schema': 'event_registration'})
 
@@ -68,6 +69,12 @@ class RegistrationInvitation(db.Model):
     )
     #: Whether registration moderation should be skipped
     skip_moderation = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False
+    )
+    #: Whether the event access check should be skipped
+    skip_access_check = db.Column(
         db.Boolean,
         nullable=False,
         default=False

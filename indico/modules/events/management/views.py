@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -57,7 +57,7 @@ class WPEventManagement(WPJinjaMixin, WPDecorated):
         return self._get_page_content(params)
 
     def _get_breadcrumbs(self):
-        return render_breadcrumbs(event=self.event, management=True)
+        return render_breadcrumbs(event=self.event, management=self.MANAGEMENT)
 
 
 class WPEventSettings(WPEventManagement):

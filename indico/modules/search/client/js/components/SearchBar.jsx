@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -56,20 +56,23 @@ export default function SearchBar({onSearch, searchTerm, placeholders}) {
 
   return (
     <Form onSubmit={handleSubmit}>
-      <Search
-        input={{fluid: true}}
-        placeholder={Translate.string('Enter your search term')}
-        results={results?.map(x => ({title: x.key, label: x.label}))}
-        value={keyword}
-        open={isSearchOpen}
-        showNoResults={false}
-        onResultSelect={handleResultSelect}
-        onSearchChange={handleSearchChange}
-        resultRenderer={resultRenderer}
-        onFocus={() => setSearchOpen(true)}
-        onBlur={() => setSearchOpen(false)}
-        fluid
-      />
+      <label styleName="search-field">
+        <Translate as="span">Search Indico</Translate>
+        <Search
+          input={{fluid: true}}
+          placeholder={Translate.string('Enter your search term')}
+          results={results?.map(x => ({title: x.key, label: x.label}))}
+          value={keyword}
+          open={isSearchOpen}
+          showNoResults={false}
+          onResultSelect={handleResultSelect}
+          onSearchChange={handleSearchChange}
+          resultRenderer={resultRenderer}
+          onFocus={() => setSearchOpen(true)}
+          onBlur={() => setSearchOpen(false)}
+          fluid
+        />
+      </label>
     </Form>
   );
 }

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -44,9 +44,4 @@ class ReservationEditLog(db.Model):
     # - reservation (Reservation.edit_logs)
 
     def __repr__(self):
-        return '<ReservationEditLog({}, {}, {}, {})>'.format(
-            self.user_name,
-            self.reservation_id,
-            self.timestamp,
-            self.info
-        )
+        return f'<ReservationEditLog({self.user_name}, {self.reservation_id}, {self.timestamp}, {self.info})>'

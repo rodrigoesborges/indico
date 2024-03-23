@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -88,7 +88,6 @@ def _handle_legacy_ids(app, **kwargs):
     or losing relevant information (0123 and 123 may be different
     events).
     """
-
     # Endpoints which need to deal with non-standard event "ids" because they might be shorturls.
     # Those endpoints handle legacy event ids on their own so we ignore them here.
     _non_standard_id_endpoints = {
@@ -145,7 +144,11 @@ def _sidemenu_items(sender, **kwargs):
                            section='customization')
         yield SideMenuItem('event_labels', _('Event Labels'), url_for('events.event_labels'),
                            section='customization')
+        yield SideMenuItem('event_keywords', _('Event Keywords'), url_for('events.event_keywords'),
+                           section='customization')
         yield SideMenuItem('unlisted_events', _('Unlisted events'), url_for('events.unlisted_events'),
+                           section='customization')
+        yield SideMenuItem('autolinker', _('Auto-linker'), url_for('events.autolinker_admin'),
                            section='customization')
 
 
@@ -192,6 +195,7 @@ def _get_cloners(sender, **kwargs):
     yield clone.EventPersonLinkCloner
     yield clone.EventProtectionCloner
     yield clone.EventSeriesCloner
+    yield clone.EventPrivacyCloner
 
 
 @signals.event.cloned.connect

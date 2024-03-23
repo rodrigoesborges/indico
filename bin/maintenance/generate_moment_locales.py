@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -92,7 +92,7 @@ def generate(output):
         elif language in moment:
             table[locale] = language
 
-    unmatched_locales = sorted(list(set(moment) - set(table.values())))
+    unmatched_locales = sorted(set(moment) - set(table.values()))
     click.secho('Locales generated.', fg='green', bold=True)
     click.secho('Unmatched moment locales:', fg='yellow')
     click.echo(json.dumps(unmatched_locales, indent=2))

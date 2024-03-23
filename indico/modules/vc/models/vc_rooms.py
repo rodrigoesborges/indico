@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -128,8 +128,7 @@ class VCRoom(db.Model):
 
 class VCRoomEventAssociation(db.Model):
     __tablename__ = 'vc_room_events'
-    __table_args__ = tuple(_make_checks()) + (db.Index(None, 'data', postgresql_using='gin'),
-                                              {'schema': 'events'})
+    __table_args__ = (*_make_checks(), db.Index(None, 'data', postgresql_using='gin'), {'schema': 'events'})
 
     #: Association ID
     id = db.Column(

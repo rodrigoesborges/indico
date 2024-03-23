@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -51,7 +51,6 @@ export function EmailParticipantRoles({
 
   const handleSubmit = async data => {
     const requestData = {...data, ...recipientData};
-    requestData.body = requestData.body.getData ? requestData.body.getData() : requestData.body;
     let resp;
     try {
       resp = await indicoAxios.post(emailSendURL({event_id: eventId}), requestData);
@@ -59,7 +58,9 @@ export function EmailParticipantRoles({
       return handleSubmitError(err);
     }
     setSentCount(resp.data.count);
-    onSubmitSucceeded(resp.data.count);
+    if (onSubmitSucceeded) {
+      onSubmitSucceeded(resp.data.count);
+    }
     setTimeout(() => onClose(), successTimeout);
   };
 
@@ -75,7 +76,6 @@ export function EmailParticipantRoles({
     <EmailDialog
       onSubmit={handleSubmit}
       onClose={onClose}
-      onSubmitSucceeded={onSubmitSucceeded}
       senders={senders}
       recipients={recipients}
       previewURL={emailPreviewURL({event_id: eventId})}

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -62,6 +62,10 @@ class WPUserPersonalData(WPUser):
 
 class WPUserFavorites(WPUser):
     bundles = ('module_users.favorites.js', 'module_users.favorites.css')
+
+
+class WPUserDataExport(WPUser):
+    bundles = ('module_users.data_export.js', 'module_users.data_export.css')
 
 
 class WPUsersAdmin(WPAdmin):

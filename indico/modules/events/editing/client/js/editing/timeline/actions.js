@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -45,6 +45,12 @@ export function reviewEditable(revision, formData) {
 
 export function confirmEditableChanges(revision, formData) {
   return submitFormAction(() => indicoAxios.post(revision.confirmURL, formData), null, () =>
+    loadTimeline()
+  );
+}
+
+export function modifyReviewComment(revision, formData) {
+  return submitFormAction(() => indicoAxios.patch(revision.reviewURL, formData), null, () =>
     loadTimeline()
   );
 }

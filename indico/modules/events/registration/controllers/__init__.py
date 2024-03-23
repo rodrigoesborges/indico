@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -34,8 +34,10 @@ class RegistrationFormMixin:
 
 class RegistrationEditMixin:
     def _get_file_data(self):
+        locator_name = 'file' if self.management else 'registrant_file'
         return {r.field_data.field.html_field_name: {'filename': r.filename, 'size': r.size,
-                                                     'uuid': KEEP_EXISTING_FILE_UUID}
+                                                     'uuid': KEEP_EXISTING_FILE_UUID,
+                                                     'locator': getattr(r.locator, locator_name)}
                 for r in self.registration.data
                 if r.field_data.field.field_impl.is_file_field and r.storage_file_id is not None}
 

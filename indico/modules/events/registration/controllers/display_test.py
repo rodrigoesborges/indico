@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -84,9 +84,7 @@ def test_withdraw_registration_rh(smtp, dummy_regform, dummy_reg, dummy_user):
         smtp,
         required=True,
         count=1,
-        subject='[Indico] Registration withdrawn for {}'.format(
-            dummy_regform.event.title
-        ),
+        subject=f'[Indico] Registration withdrawn for {dummy_regform.event.title}',
         to=dummy_user.email,
     )
     extract_emails(

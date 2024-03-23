@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -11,7 +11,7 @@ import typing as t
 from collections import defaultdict
 from datetime import datetime
 from io import BytesIO
-from operator import itemgetter
+from operator import attrgetter, itemgetter
 
 import requests
 from flask import render_template, session
@@ -24,7 +24,7 @@ from indico.core import signals
 from indico.core.auth import multipass
 from indico.core.db import db
 from indico.core.db.sqlalchemy.custom.unaccent import unaccent_match
-from indico.core.db.sqlalchemy.principals import PrincipalType
+from indico.core.db.sqlalchemy.principals import PrincipalMixin, PrincipalPermissionsMixin, PrincipalType
 from indico.core.db.sqlalchemy.util.queries import escape_like
 from indico.modules.categories import Category
 from indico.modules.categories.models.principals import CategoryPrincipal
@@ -33,11 +33,12 @@ from indico.modules.users import User, logger
 from indico.modules.users.models.emails import UserEmail
 from indico.modules.users.models.favorites import favorite_user_table
 from indico.modules.users.models.suggestions import SuggestedCategory
-from indico.modules.users.models.users import ProfilePictureSource
+from indico.modules.users.models.users import ProfilePictureSource, UserTitle
 from indico.util.date_time import now_utc
 from indico.util.event import truncate_path
 from indico.util.fs import secure_filename
 from indico.util.i18n import _
+from indico.util.signals import make_interceptable
 from indico.util.string import crc32, remove_accents
 from indico.web.flask.util import send_file, url_for
 
@@ -146,11 +147,15 @@ def get_linked_events(user, dt, limit=None, load_also=()):
     for event_id, roles in get_events_with_paper_roles(user, dt).items():
         links.setdefault(event_id, set()).update(roles)
     for event in user.favorite_events:
-        if event.start_dt >= dt:
+        if dt is None or event.start_dt >= dt:
             links.setdefault(event.id, set()).add('favorited')
 
     if not links:
         return {}
+
+    # Find events (past and future) which are closest to the current time
+    time_delta = now_utc(False) - Event.start_dt
+    absolute_time_delta = db.func.abs(db.func.extract('epoch', time_delta))
 
     query = (Event.query
              .filter(~Event.is_deleted,
@@ -160,10 +165,13 @@ def get_linked_events(user, dt, limit=None, load_also=()):
                       load_only('id', 'category_id', 'title', 'start_dt', 'end_dt',
                                 'series_id', 'series_pos', 'series_count', 'label_id', 'label_message',
                                 *load_also))
-             .order_by(Event.start_dt, Event.id))
+             .order_by(absolute_time_delta, Event.id))
     if limit is not None:
         query = query.limit(limit)
-    return {event: links[event.id] for event in query}
+
+    # Sort by 'start_dt' so that past events appear at the top and future events at the bottom
+    events = sorted(query, key=attrgetter('start_dt'))
+    return {event: links[event.id] for event in events}
 
 
 def get_unlisted_events(user):
@@ -173,6 +181,11 @@ def get_unlisted_events(user):
             .options(load_only('id', 'title', 'start_dt'))
             .order_by(Event.start_dt)
             .all())
+
+
+@make_interceptable
+def get_user_titles():
+    return [{'name': t.name, 'title': t.title} for t in UserTitle if t != UserTitle.none]
 
 
 def serialize_user(user):
@@ -232,10 +245,9 @@ def build_user_search_query(criteria, exact=False, include_deleted=False, includ
         query = (query.outerjoin(favorite_user_table, db.and_(favorite_user_table.c.user_id == session.user.id,
                                                               favorite_user_table.c.target_id == User.id))
                  .order_by(nullslast(favorite_user_table.c.user_id)))
-    query = query.order_by(db.func.lower(db.func.indico.indico_unaccent(User.first_name)),
-                           db.func.lower(db.func.indico.indico_unaccent(User.last_name)),
-                           User.id)
-    return query
+    return query.order_by(db.func.lower(db.func.indico.indico_unaccent(User.first_name)),
+                          db.func.lower(db.func.indico.indico_unaccent(User.last_name)),
+                          User.id)
 
 
 def _deduplicate_identities(identities):
@@ -280,7 +292,6 @@ def search_users(exact=False, include_deleted=False, include_pending=False, incl
              for external users not yet in Indico and :class:`.User`
              objects for existing users.
     """
-
     criteria = {key: value.strip() for key, value in criteria.items() if value.strip()}
 
     if not criteria:
@@ -355,7 +366,6 @@ def merge_users(source, target, force=False):
     :param source: source user (will be set as deleted)
     :param target: target user (final)
     """
-
     if source.is_deleted and not force:
         raise ValueError(f'Source user {source} has been deleted. Merge aborted.')
 
@@ -407,6 +417,63 @@ def merge_users(source, target, force=False):
     db.session.flush()
 
     logger.info('Successfully merged %s into %s', source, target)
+
+
+def anonymize_user(user):
+    """Anonymize a user, removing all their personal data."""
+    signals.users.anonymized.send(user, flushed=False)
+    user.first_name = '<anonymous>'
+    user.last_name = f'<anonymous-{user.id}>'
+    user.title = UserTitle.none
+    user.affiliation = ''
+    user.affiliation_id = None
+    user.phone = ''
+    user.address = ''
+    user.picture = None
+    user.picture_metadata = None
+    user.picture_source = ProfilePictureSource.standard
+    user.favorite_users = set()
+    user.favorite_events = set()
+    user.favorite_categories = set()
+    user.identities = set()
+    user.is_admin = False
+
+    # Reset/invalidate any tokens for the user
+    if user.api_key:
+        user.api_key.is_active = False
+    user.reset_signing_secret()
+    user.oauth_app_links.delete()
+    for token in user.personal_tokens:
+        token.revoke()
+
+    user.secondary_emails.clear()
+    user.email = f'indico-{user.id}@indico.invalid'
+
+    editables = user.editor_for_editables
+    for editable in editables:
+        editable.editor = None
+
+    reservations = user.reservations_booked_for
+    for reservation in reservations:
+        reservation.booked_for_name = user.full_name
+
+    user.event_roles.clear()
+    user.category_roles.clear()
+    user.suggested_categories.order_by(None).delete()
+
+    # Unlink registrations + persons (those hold personal data and are linked by email which no longer matches)
+    user.registrations.update({db.m.Registration.user_id: None})
+    user.event_persons.update({db.m.EventPerson.user_id: None})
+
+    principal_classes = [sc for sc in [*PrincipalMixin.__subclasses__(), *PrincipalPermissionsMixin.__subclasses__()]
+                         if hasattr(sc, 'query')]
+
+    for cls in principal_classes:
+        cls.query.filter(cls.user == user).delete()
+
+    user.is_deleted = True
+    db.session.flush()
+    signals.users.anonymized.send(user, flushed=True)
 
 
 def get_color_for_user_id(user_id: t.Union[int, str]):

@@ -311,7 +311,23 @@ Customization
 
 .. data:: LOGO_URL
 
-    The URL to a custom logo.  If unset, the default Indico logo is used.
+    The URL to a custom logo.  If unset, the default monochrome Indico logo is
+    used.
+
+    Default: ``None``
+
+.. data:: LOGIN_LOGO_URL
+
+    The URL to a custom logo used on the login page.  If unset, the default
+    Indico logo is used.
+
+    Default: ``None``
+
+.. data:: WALLET_LOGO_URL
+
+    The URL to a custom logo used in Google Wallet tickets.  If unset, a compact
+    version of the default Indico logo is used.  The URL must publicly accessible
+    from the Internet and changes typically do not affect existing tickets.
 
     Default: ``None``
 
@@ -350,6 +366,20 @@ Customization
     will effectively hide the language altogether.
 
     Default: ``{}``
+
+.. data:: CHECKIN_APP_URL
+
+    The URL of the mobile checkin app. The app is purely client-side and only
+    communicates with your Indico instance, so even when using the default app
+    (which is hosted in CERN's datacenter in Switzerland) no data about your
+    events or participants is sent to CERN, the Indico dev team or anyone else.
+    If you wish to use a custom app nonetheless, you can find its
+    `source code on GitHub <https://github.com/indico/indico-checkin-pwa/>`_ and
+    deploy it wherever you want. Note that you need to add the URL of the app
+    to the *"Allowed authorization callback URLs"* of the OAuth app named
+    "Checkin App" in the Indico admin area.
+
+    Default: ``'https://checkin.getindico.io'``
 
 
 Database
@@ -724,6 +754,17 @@ Storage
 
     Default: ``None``
 
+.. data:: MAX_DATA_EXPORT_SIZE
+
+    The maximum file size (in MB) for files added to the user data export archive.
+    Note that this limit does not apply to the YAML metadata files which are
+    always generated and typically do not exceed a few megabytes. However,
+    any additional files such as attachments, papers, etc., that the user might
+    have and that do not fit within the limit are not included in the exported
+    archive. The default size is 10 GB.
+
+    Default: ``10 * 1024``
+
 
 System
 ------
@@ -838,6 +879,12 @@ System
 .. data:: ENABLE_ROOMBOOKING
 
     Whether to enable the room booking system.
+
+    Default: ``False``
+
+.. data:: ENABLE_GOOGLE_WALLET
+
+    Whether to enable the Google Wallet integration for event tickets.
 
     Default: ``False``
 

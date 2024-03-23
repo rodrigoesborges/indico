@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -28,7 +28,6 @@ $modal-footer-height: 60px;
   }
 
   .modal-dialog-content {
-    box-sizing: border-box;
     padding: 1em;
     max-height: 100%;
   }
@@ -39,11 +38,10 @@ $modal-footer-height: 60px;
     }
 
     .modal-dialog-header {
-      box-sizing: border-box;
       background-color: $light-gray;
       border-bottom: 1px solid darken($light-gray, 5%);
       padding: 1em;
-      height: $modal-header-height;
+      height: auto;
       width: 100%;
 
       a.icon-cross {
@@ -58,7 +56,6 @@ $modal-footer-height: 60px;
   }
 
   %modal-dialog-footer {
-    box-sizing: border-box;
     background-color: $light-gray;
     border-top: 1px solid darken($light-gray, 5%);
     padding: 1em;

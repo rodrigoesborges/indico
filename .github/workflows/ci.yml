@@ -1,19 +1,23 @@
 name: CI
 
 env:
+  TZ: Europe/Zurich
   PYTHON_VERSION_39: '3.9.18'
   PYTHON_VERSION_310: '3.10.13'
-  PYTHON_VERSION_311: '3.11.5'
+  PYTHON_VERSION_311: '3.11.8'
+  PYTHON_VERSION_312: '3.12.2'
 
 on:
   push:
     branches:
       - master
       - '*.x'
+      - a11y
   pull_request:
     branches:
       - master
       - '*.x'
+      - a11y
 
 jobs:
   setup:
@@ -24,26 +28,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: '3.9', python: '3.9', python_version_var: 'PYTHON_VERSION_39', tox: py39 }
-          - { name: '3.10', python: '3.10', python_version_var: 'PYTHON_VERSION_310', tox: py310 }
-          - { name: '3.11', python: '3.11', python_version_var: 'PYTHON_VERSION_311', tox: py311 }
+          - { name: '3.9', python: '3.9', python_version_var: 'PYTHON_VERSION_39' }
+          - { name: '3.10', python: '3.10', python_version_var: 'PYTHON_VERSION_310' }
+          - { name: '3.11', python: '3.11', python_version_var: 'PYTHON_VERSION_311' }
+          - { name: '3.12', python: '3.12', python_version_var: 'PYTHON_VERSION_312' }
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: cache-npm
         with:
           path: node_modules
           key: ${{ runner.os }}-npm-${{ hashFiles('package*.json') }}
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env[matrix.python_version_var] }}
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         if: steps.cache-npm.outputs.cache-hit != 'true'
         with:
           node-version: 18.x
@@ -67,7 +72,7 @@ jobs:
         run: echo "dir=$(pip cache dir)" >> $GITHUB_OUTPUT
 
       - name: Cache pip
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: pip|${{ runner.os }}|${{ matrix.python }}|${{ hashFiles('requirements*.txt') }}
@@ -85,7 +90,7 @@ jobs:
         run: tar cf /tmp/env.tar .venv node_modules
 
       - name: Upload environment
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: environment-${{ matrix.name }}
           retention-days: 1
@@ -100,19 +105,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION_311 }}
+          python-version: ${{ env.PYTHON_VERSION_312 }}
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18.x
 
       - name: Download environment
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: environment-3.11
+          name: environment-3.12
           path: /tmp
 
       - name: Restore environment
@@ -134,12 +139,25 @@ jobs:
         if: success() || failure()
         run: python bin/maintenance/update_backrefs.py --ci
 
+      - name: Check icomoon css
+        if: success() || failure()
+        run: python bin/maintenance/generate_icons.py --ci
+
+      - name: Check moment locales
+        if: success() || failure()
+        run: python bin/maintenance/update_moment_locales.py --ci
+
       - name: Check headers
         if: success() || failure()
         run: |
           echo "::add-matcher::.github/matchers/headers-problem-matcher.json"
-          python bin/maintenance/update_header.py --ci
+          unbehead --check
           echo "::remove-matcher owner=headers::"
+
+      - name: Run ruff
+        if: success() || failure()
+        run: |
+          ruff check --output-format github .
 
       - name: Run flake8
         if: success() || failure()
@@ -154,18 +172,22 @@ jobs:
 
       - name: Try extracting i18n strings (Python)
         if: success() || failure()
-        run: indico i18n extract-messages
+        run: indico i18n extract indico --python
 
       - name: Try extracting i18n strings (JS)
         if: success() || failure()
         run: |
           echo "::add-matcher::.github/matchers/react-jsx-i18n-problem-matcher.json"
-          FORCE_COLOR=1 npx react-jsx-i18n extract --ext jsx indico/web/client/ indico/modules/ > /dev/null
+          FORCE_COLOR=1 indico i18n extract indico --react
           echo "::remove-matcher owner=react-jsx-i18n::"
 
       - name: Check i18n format strings
         if: success() || failure()
         run: indico i18n check-format-strings
+
+      - name: Check i18n HTML tags
+        if: success() || failure()
+        run: indico i18n check-html-tags
 
       - name: Run eslint
         if: success() || failure()
@@ -179,6 +201,7 @@ jobs:
              indico/web/client/js/react/
              indico/modules/users/
              indico/modules/search/
+             indico/modules/receipts/
 
       - name: Run stylelint for all files
         if: github.event_name == 'push' && (success() || failure())
@@ -192,7 +215,7 @@ jobs:
       # https://github.com/actions/toolkit/issues/457
       - name: Get list of changed files
         if: github.event_name == 'pull_request' && (success() || failure())
-        uses: umani/changed-files@v4.0.1
+        uses: umani/changed-files@v4.1.0
         with:
           repo-token: ${{ github.token }}
           result-encoding: json
@@ -216,9 +239,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: '3.9', python: '3.9', python_version_var: 'PYTHON_VERSION_39', tox: py39 }
-          - { name: '3.10', python: '3.10', python_version_var: 'PYTHON_VERSION_310', tox: py310 }
-          - { name: '3.11', python: '3.11', python_version_var: 'PYTHON_VERSION_311', tox: py311 }
+          - { name: '3.9', python: '3.9', python_version_var: 'PYTHON_VERSION_39' }
+          - { name: '3.10', python: '3.10', python_version_var: 'PYTHON_VERSION_310' }
+          - { name: '3.11', python: '3.11', python_version_var: 'PYTHON_VERSION_311' }
+          - { name: '3.12', python: '3.12', python_version_var: 'PYTHON_VERSION_312' }
 
     services:
       postgres:
@@ -234,17 +258,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env[matrix.python_version_var] }}
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18.x
 
       - name: Download environment
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: environment-${{ matrix.name }}
           path: /tmp
@@ -290,19 +314,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION_311 }}
+          python-version: ${{ env.PYTHON_VERSION_312 }}
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18.x
 
       - name: Download environment
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: environment-3.11
+          name: environment-3.12
           path: /tmp
 
       - name: Restore environment

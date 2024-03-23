@@ -1,12 +1,9 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
-
-pytest_plugins = 'indico.core.oauth.testing.fixtures'
-
 
 def test_personal_token_expires(dummy_personal_token):
     assert dummy_personal_token.get_expires_in() == 0

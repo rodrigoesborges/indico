@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -50,6 +50,9 @@ class RH:
     #: `locators` is a set of callables returning objects with locators.
     #: `preserved_args` is a set of view arg names which will always
     #: be copied from the current request if present.
+    #: `copy_query_args` specified arguments that are in the query string
+    #: but may be provided by one of the locators and thus need to be taken
+    #: from the query string when checking if a redirect is needed.
     #: The callables are always invoked with a single `self` argument
     #: containing the RH instance.
     #: `endpoint` may be used to specify the endpoint used to build
@@ -70,6 +73,7 @@ class RH:
         'args': {},
         'locators': set(),
         'preserved_args': set(),
+        'copy_query_args': set(),
         'endpoint': None
     }
 
@@ -125,6 +129,7 @@ class RH:
             'args': self.normalize_url_spec.get('args', {}),
             'locators': self.normalize_url_spec.get('locators', set()),
             'preserved_args': self.normalize_url_spec.get('preserved_args', set()),
+            'copy_query_args': self.normalize_url_spec.get('copy_query_args', set()),
             'endpoint': self.normalize_url_spec.get('endpoint', None)
         }
         # Initialize the new view args with preserved arguments (since those would be lost otherwise)
@@ -159,6 +164,8 @@ class RH:
             return str(v) if isinstance(v, int) else v
 
         provided = {k: _convert(v) for k, v in request.view_args.items() if k not in defaults}
+        if spec['copy_query_args']:
+            provided.update((k, _convert(v)) for k, v in request.args.items() if k in spec['copy_query_args'])
         new_view_args = {k: _convert(v) for k, v in new_view_args.items() if v is not None}
         if new_view_args != provided:
             if request.method in {'GET', 'HEAD'}:
@@ -213,6 +220,10 @@ class RH:
             msg = _("It looks like there was a problem with your current session. Please use your browser's back "
                     'button, reload the page and try again.')
             raise BadRequest(msg)
+
+    def _check_terms(self):
+        from indico.modules.legal import confirm_rh_terms_required
+        return confirm_rh_terms_required()
 
     def _check_event_feature(self):
         from indico.modules.events.features.util import require_feature
@@ -282,6 +293,9 @@ class RH:
         try:
             init_email_queue()
             self._check_csrf()
+            if terms_response := self._check_terms():
+                return terms_response
+
             res = self._do_process()
             signals.core.after_process.send()
 
@@ -318,17 +332,17 @@ class RHSimple(RH):
 
     :param func: A function returning HTML
     """
+
     def __init__(self, func):
         RH.__init__(self)
         self.func = func
 
     def _process(self):
-        rv = self.func()
-        return rv
+        return self.func()
 
     @classmethod
     def wrap_function(cls, func, *, disable_csrf_check=False):
-        """Decorates a function to run within the RH's framework"""
+        """Decorate a function to run within the RH's framework."""
         @wraps(func)
         def wrapper(*args, **kwargs):
             rh = cls(partial(func, *args, **kwargs))
@@ -408,3 +422,18 @@ def json_errors(rh):
     """
     rh._JSON_ERRORS = True
     return rh
+
+
+def cors(rh=None, /, **options):
+    """Enable CORS for the decorated RH."""
+
+    def decorator(rh):
+        rh._CORS = options
+        return rh
+
+    if rh is None:
+        # if we used `@cors()` we need to return the inner decorator
+        return decorator
+
+    # in case of `@cors` we have the RH and can apply the actual decorator
+    return decorator(rh)

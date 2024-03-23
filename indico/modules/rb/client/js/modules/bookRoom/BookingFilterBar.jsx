@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -38,6 +38,7 @@ class BookingFilterBar extends React.Component {
         number: PropTypes.number,
         type: PropTypes.string,
         interval: PropTypes.string,
+        weekdays: PropTypes.arrayOf(PropTypes.string),
       }).isRequired,
       dates: PropTypes.shape({
         startDate: PropTypes.string,
@@ -84,14 +85,15 @@ class BookingFilterBar extends React.Component {
               form={(fieldValues, setParentField) => (
                 <RecurrenceForm setParentField={setParentField} {...fieldValues} />
               )}
-              setGlobalState={({type, number, interval}) => {
-                setFilterParameter('recurrence', {type, number, interval});
+              setGlobalState={({type, number, interval, weekdays}) => {
+                setFilterParameter('recurrence', {type, number, interval, weekdays});
               }}
               initialValues={recurrence}
               defaults={{
                 type: 'single',
                 number: 1,
                 interval: 'week',
+                weekdays: [],
               }}
               renderValue={renderRecurrence}
             />

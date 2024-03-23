@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -22,7 +22,6 @@ from indico.testing.util import bool_matrix
 from indico.util.date_time import get_day_end, get_day_start
 
 
-pytest_plugins = 'indico.modules.rb.testing.fixtures'
 _notset = object()
 
 
@@ -54,7 +53,7 @@ def test_full_name(create_room, building, floor, number, verbose_name, expected_
     assert room.full_name == expected_name
 
 
-@pytest.mark.parametrize(('name',), (
+@pytest.mark.parametrize('name', (
     (None,),
     ('1/2-3',),
     ('Test',)
@@ -217,7 +216,7 @@ def test_filter_available(dummy_room, create_reservation, create_blocking,
     if has_pending_blocking:
         create_blocking(state=BlockedRoom.State.pending)
     availabilty_filter = Room.filter_available(get_day_start(date.today()), get_day_end(date.today()),
-                                               (RepeatFrequency.NEVER, 0), include_blockings=True,
+                                               (RepeatFrequency.NEVER, 0, None), include_blockings=True,
                                                include_pre_bookings=include_pre_bookings,
                                                include_pending_blockings=include_pending_blockings)
     assert set(Room.query.filter(availabilty_filter)) == (set() if filtered else {dummy_room})

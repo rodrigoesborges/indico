@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -220,7 +220,11 @@ import {SeriesManagement} from './SeriesManagement';
 
     $('.js-event-person-list td').on('mouseenter', function() {
       const $this = $(this);
-      if (this.offsetWidth < this.scrollWidth && !$this.attr('title')) {
+      if (
+        this.offsetWidth < this.scrollWidth &&
+        !$this.attr('title') &&
+        !$this.find('.js-popup-container').length
+      ) {
         $this.attr('title', $this.text());
       }
     });

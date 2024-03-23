@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -93,9 +93,7 @@ class AgreementDefinitionBase:
 
     @classmethod
     def get_email_body_template(cls, event, **kwargs):
-        """
-        Return the template of the email body for this agreement definition.
-        """
+        """Return the template of the email body for this agreement definition."""
         template_name = cls.email_body_template_name or 'emails/agreement_default_body.html'
         template_path = get_overridable_template_name(template_name, cls.plugin, 'events/agreements/')
         return get_template_module(template_path, event=event)
@@ -103,9 +101,7 @@ class AgreementDefinitionBase:
     @classmethod
     @memoize_request
     def get_people(cls, event):
-        """
-        Return a dictionary of :class:`AgreementPersonInfo` required to sign agreements.
-        """
+        """Return a dictionary of :class:`AgreementPersonInfo` required to sign agreements."""
         people = cls.iter_people(event)
         if people is None:
             return {}
@@ -113,9 +109,7 @@ class AgreementDefinitionBase:
 
     @classmethod
     def get_people_not_notified(cls, event):
-        """
-        Return a dictionary of :class:`AgreementPersonInfo` yet to be notified.
-        """
+        """Return a dictionary of :class:`AgreementPersonInfo` yet to be notified."""
         people = cls.get_people(event)
         sent_agreements = {a.identifier for a in event.agreements.filter_by(type=cls.name)}
         return {k: v for k, v in people.items() if v.identifier not in sent_agreements}

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -73,3 +73,7 @@ class RegistrationSettingsProxy(EventSettingsProxy):
 
 
 event_badge_settings = EventSettingsProxy('badge', DEFAULT_BADGE_SETTINGS, converters=BADGE_SETTING_CONVERTERS)
+
+event_wallet_settings = EventSettingsProxy('wallet', {
+    'google_wallet_class_id': None,
+})

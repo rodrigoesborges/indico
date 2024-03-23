@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -703,7 +703,7 @@ import Palette from '../../utils/palette';
 
       if (self.options.confirmation) {
         const text = $T
-          .gettext('You selected category <em>{0}</em>. Are you sure you want to proceed?')
+          .gettext('You selected category "{0}". Are you sure you want to proceed?')
           .format(self._categories[categoryId].title);
         confirmPrompt(text, $T.gettext('Confirm action')).then(callback);
       } else {

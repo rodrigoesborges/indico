@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -19,7 +19,7 @@ from indico.core.errors import IndicoError, get_error_description
 from indico.core.logger import Logger
 from indico.modules.auth.util import redirect_to_login
 from indico.util.i18n import _
-from indico.web.errors import render_error
+from indico.web.errors import _need_json_response, render_error
 from indico.web.flask.wrappers import IndicoBlueprint
 from indico.web.util import ExpectedError
 
@@ -31,7 +31,7 @@ errors_bp = IndicoBlueprint('errors', __name__)
 def handle_forbidden(exc):
     if exc.response:
         return exc
-    if (session.user is None and not request.is_xhr and not request.is_json and request.blueprint != 'auth' and
+    if (session.user is None and not _need_json_response() and request.blueprint != 'auth' and
             not g.get('get_request_user_failed')):
         return redirect_to_login(reason=_('Please log in to access this page.'))
     return render_error(exc, _('Access Denied'), get_error_description(exc), exc.code)
@@ -71,7 +71,7 @@ def handle_unprocessableentity(exc):
 @errors_bp.app_errorhandler(BadRequestKeyError)
 def handle_badrequestkeyerror(exc):
     if current_app.debug:
-        raise
+        raise  # noqa: PLE0704
     msg = _('Required argument missing: {}').format(str(exc))
     return render_error(exc, exc.name, msg, exc.code)
 
@@ -111,7 +111,7 @@ def handle_exception(exc, message=None):
     if not current_app.debug or request.is_xhr or request.is_json:
         sentry_sdk.capture_exception(exc)
         if message is None:
-            message = f'{type(exc).__name__}: {str(exc)}'
+            message = f'{type(exc).__name__}: {exc!s}'
         if os.environ.get('INDICO_DEV_SERVER') == '1':
             # If we are in the dev server, we always want to see a traceback on the
             # console, even if this was an API request.
@@ -120,4 +120,4 @@ def handle_exception(exc, message=None):
     # Let the exception propagate to middleware / the webserver.
     # This triggers the Flask debugger in development and sentry
     # logging (if enabled) (via got_request_exception).
-    raise
+    raise  # noqa: PLE0704

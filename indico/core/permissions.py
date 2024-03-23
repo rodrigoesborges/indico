@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -55,7 +55,7 @@ def check_permissions(type_):
     permissions = get_available_permissions(type_)
     if not all(x.islower() for x in permissions):
         raise RuntimeError('Management permissions must be all-lowercase')
-    if len(list(x for x in permissions.values() if x.default)) > 1:
+    if sum(1 for x in permissions.values() if x.default) > 1:
         raise RuntimeError('Only one permission can be the default')
 
 

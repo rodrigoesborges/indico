@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -12,7 +12,7 @@ from indico.web.forms.widgets import JinjaWidget
 
 
 class IndicoQuerySelectMultipleField(QuerySelectMultipleField):
-    """Like the parent, but with a callback that allows you to modify the list
+    """Like the parent, but with a callback that allows you to modify the list.
 
     The callback can return a new list or yield items, and you can use it e.g. to sort the list.
     """

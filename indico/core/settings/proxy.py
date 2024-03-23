@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -305,7 +305,7 @@ class SettingProperty:
 
     def _make_args(self, obj, *args):
         if self.attrgetter is not None:
-            return (self.attrgetter(obj),) + args
+            return (self.attrgetter(obj), *args)
         else:
             return args
 
@@ -362,7 +362,7 @@ class PrefixSettingsProxy:
 
     def _call(self, fn, arg, *args, **kwargs):
         if self.has_arg:
-            args = [arg] + list(args)
+            args = [arg, *args]
         return fn(*args, **kwargs)
 
     def _resolve_prefix(self, name):

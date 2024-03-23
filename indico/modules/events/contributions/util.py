@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -128,7 +128,6 @@ def generate_spreadsheet_from_contributions(contributions):
     Return a tuple consisting of spreadsheet columns and respective
     contribution values.
     """
-
     has_board_number = any(c.board_number for c in contributions)
     has_authors = any(pl.author_type != AuthorType.none for c in contributions for pl in c.person_links)
     headers = ['Id', 'Title', 'Description', 'Date', 'Duration', 'Type', 'Session', 'Track', 'Presenters',
@@ -163,14 +162,11 @@ def generate_spreadsheet_from_contributions(contributions):
         if has_board_number:
             contrib_data['Board number'] = c.board_number
 
-        attachments = []
         attached_items = get_attached_items(c)
-        for attachment in attached_items.get('files', []):
-            attachments.append(attachment.absolute_download_url)
-
-        for folder in attached_items.get('folders', []):
-            for attachment in folder.attachments:
-                attachments.append(attachment.absolute_download_url)
+        attachments = [att.absolute_download_url for att in attached_items.get('files', [])]
+        attachments.extend(attachment.absolute_download_url
+                           for folder in attached_items.get('folders', [])
+                           for attachment in folder.attachments)
 
         if attachments:
             contrib_data['Materials'] = ', '.join(attachments)

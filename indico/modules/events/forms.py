@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -21,13 +21,13 @@ from indico.modules.events.models.labels import EventLabel
 from indico.modules.events.models.references import ReferenceType
 from indico.util.i18n import _
 from indico.web.forms.base import IndicoForm
-from indico.web.forms.fields import (IndicoDateTimeField, IndicoEnumRadioField, IndicoLocationField,
+from indico.web.forms.fields import (IndicoDateTimeField, IndicoEnumRadioField, IndicoLocationField, IndicoTagListField,
                                      IndicoTimezoneSelectField, JSONField, OccurrencesField)
 from indico.web.forms.fields.colors import SUIColorPickerField
 from indico.web.forms.fields.principals import PrincipalListField
 from indico.web.forms.fields.simple import IndicoButtonsBooleanField
 from indico.web.forms.validators import HiddenUnless, LinkedDateTime, UsedIf
-from indico.web.forms.widgets import CKEditorWidget, SwitchWidget
+from indico.web.forms.widgets import SwitchWidget, TinyMCEWidget
 
 
 class ReferenceTypeForm(IndicoForm):
@@ -73,6 +73,20 @@ class EventLabelForm(IndicoForm):
             raise ValidationError(_('This title is already in use.'))
 
 
+class EventKeywordsForm(IndicoForm):
+    keywords = IndicoTagListField(_('Keywords'))
+
+    def post_validate(self):
+        # case-insensitive keywords deduplication
+        keywords = []
+        seen_keywords = set()
+        for keyword in self.keywords.data:
+            if keyword.lower() not in seen_keywords:
+                keywords.append(keyword)
+                seen_keywords.add(keyword.lower())
+        self.keywords.data = keywords
+
+
 class EventCreationFormBase(IndicoForm):
     listing = IndicoButtonsBooleanField(_('Listing'), default=True,
                                         true_caption=(_('List in a category'), 'eye'),
@@ -109,7 +123,7 @@ class LectureCreationForm(EventCreationFormBase):
     _advanced_field_order = ('description', 'theme')
     occurrences = OccurrencesField(_('Dates'), [DataRequired()])
     person_link_data = EventPersonLinkListField(_('Speakers'), event_type=EventType.lecture)
-    description = TextAreaField(_('Description'), widget=CKEditorWidget())
+    description = TextAreaField(_('Description'), widget=TinyMCEWidget())
     theme = IndicoThemeSelectField(_('Theme'), event_type=EventType.lecture, allow_default=True)
 
 

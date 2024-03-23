@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -26,6 +26,7 @@ from indico.web.util import get_request_user
 
 class _DataWrapper:
     """Wrapper for the return value of generated_data properties."""
+
     def __init__(self, data):
         self.data = data
 
@@ -52,7 +53,7 @@ class IndicoFormMeta(FormMeta):
         # if the signal receiver didn't specify a sender.
         if kwargs.pop('__extended', False):
             return super().__call__(*args, **kwargs)
-        extra_fields = values_from_signal(signals.core.add_form_fields.send(cls))
+        extra_fields = values_from_signal(signals.core.add_form_fields.send(cls, form_args=args, form_kwargs=kwargs))
         # If there are no extra fields, we don't need any custom logic
         # and simply create an instance of the original form.
         if not extra_fields:
@@ -173,7 +174,7 @@ class IndicoForm(FlaskForm, metaclass=IndicoFormMeta):
 
     @property
     def error_list(self):
-        """A list containing all errors, prefixed with the field's label.'"""
+        """A list containing all errors, prefixed with the field's label."""
         all_errors = []
         for field_name, errors in self.errors.items():
             for error in errors:
@@ -197,7 +198,7 @@ class IndicoForm(FlaskForm, metaclass=IndicoFormMeta):
     def data(self):
         """Extend form.data with generated data from properties."""
         data = {k: v
-                for k, v in super(IndicoForm, self).data.items()
+                for k, v in super().data.items()
                 if k != self.meta.csrf_field_name and not k.startswith('ext__')}
         data.update(self.generated_data)
         return data

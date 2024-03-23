@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -228,7 +228,7 @@ class FileSystemStorage(Storage):
 
     def open(self, file_id):
         try:
-            return open(self._resolve_path(file_id), 'rb')
+            return open(self._resolve_path(file_id), 'rb')  # noqa: SIM115
         except Exception as e:
             raise StorageError(f'Could not open "{file_id}": {e}') from e
 

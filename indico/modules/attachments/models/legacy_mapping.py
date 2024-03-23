@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -95,9 +95,7 @@ class LegacyAttachmentFolderMapping(_LegacyLinkMixin, db.Model):
     )
 
     def __repr__(self):
-        return '<LegacyAttachmentFolderMapping({}, material_id={}, {})>'.format(
-            self.folder, self.material_id, self.link_repr
-        )
+        return f'<LegacyAttachmentFolderMapping({self.folder}, material_id={self.material_id}, {self.link_repr})>'
 
 
 class LegacyAttachmentMapping(_LegacyLinkMixin, db.Model):

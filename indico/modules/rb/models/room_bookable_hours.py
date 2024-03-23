@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -35,11 +35,7 @@ class BookableHours(db.Model):
     # - room (Room.bookable_hours)
 
     def __repr__(self):
-        return '<BookableHours({}, {}, {})>'.format(
-            self.room_id,
-            self.start_time,
-            self.end_time
-        )
+        return f'<BookableHours({self.room_id}, {self.start_time}, {self.end_time})>'
 
     def fits_period(self, st, et):
         st = _tuplify(st, False)

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -84,5 +84,5 @@ class PaperFile(StoredFileMixin, db.Model):
         path_segments = ['event', strict_str(self._contribution.event.id), 'papers',
                          f'{self.id}_{strict_str(self._contribution.id)}']
         filename = secure_filename(self.filename, 'paper')
-        path = posixpath.join(*(path_segments + [filename]))
+        path = posixpath.join(*path_segments, filename)
         return config.ATTACHMENT_STORAGE, path

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -233,7 +233,8 @@ class ContributionTypeForm(IndicoForm):
 
 
 class ContributionExportTeXForm(IndicoForm):
-    """Form for TeX-based export selection"""
+    """Form for TeX-based export selection."""
+
     format = SelectField(_('Format'), default='PDF')
     sort_by = IndicoEnumSelectField(_('Sort by'), enum=BOASortField, default=BOASortField.abstract_title,
                                     sorted=True)

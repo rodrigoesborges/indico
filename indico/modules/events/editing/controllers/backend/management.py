@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -61,7 +61,7 @@ class RHEditTag(RHEditingManagementBase):
     def _process_PATCH(self, data):
         if self.tag.system and not self.is_service_call:
             raise Forbidden
-        update_tag(self.tag, **data)
+        update_tag(self.tag, data)
         return EditingTagSchema().jsonify(self.tag)
 
     def _process_DELETE(self):
@@ -281,10 +281,18 @@ class RHEmailNotSubmittedEditablesPreview(EmailRolesPreviewMixin, RHEditableType
     object_context = 'contributions'
 
     def get_placeholder_kwargs(self):
-        query = Contribution.query.with_parent(self.event).filter(
-            ~Contribution.editables.any(Editable.type == self.editable_type)
+        query = (
+            Contribution.query
+            .with_parent(self.event)
+            .filter(~Contribution.editables.any(Editable.type == self.editable_type))
         )
-        if contribution := query.join(ContributionPersonLink).join(EventPerson).filter(EventPerson.email != '').first():
+        contrib_with_email_query = (
+            query
+            .join(ContributionPersonLink)
+            .join(EventPerson)
+            .filter(EventPerson.email != '')  # noqa: PLC1901
+        )
+        if contribution := contrib_with_email_query.first():
             person = next(p for p in contribution.person_links if p.email)
         else:
             contribution = query.first()

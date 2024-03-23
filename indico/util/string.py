@@ -1,27 +1,30 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
-"""
-String manipulation functions
-"""
+"""String manipulation functions."""
 
 import binascii
 import os
 import re
 import string
+import typing as t
 import unicodedata
+from collections import OrderedDict
 from email.utils import escapesre, specialsre
 from enum import Enum
 from itertools import chain
 from operator import attrgetter
+from urllib.parse import urlsplit
 from uuid import uuid4
+from xml.etree.ElementTree import Element
 
 import bleach
 import email_validator
+import html5lib
 import markdown
 import translitcodec
 from bleach.css_sanitizer import CSSSanitizer
@@ -32,10 +35,108 @@ from markupsafe import Markup, escape
 from sqlalchemy import ForeignKeyConstraint, inspect
 
 
+class AutoLinkExtension(markdown.extensions.Extension):
+    def __init__(self, rules: list[list], **kwargs):
+        self.rules = rules
+        super().__init__(**kwargs)
+
+    def extendMarkdown(self, md: markdown.Markdown):  # noqa: N802
+        for n, rule in enumerate(self.rules):
+            md.inlinePatterns.register(AutoLinkInlineProcessor(rule['regex'], md, rule['url']), f'linker_{n}', 50)
+
+
+class AutoLinkInlineProcessor(markdown.inlinepatterns.InlineProcessor):
+    # exclude subsitution within links (nesting)
+    ANCESTOR_EXCLUDES = ('a',)
+
+    def __init__(self, pattern: str, md: markdown.Markdown, url: str):
+        self.url = url
+        super().__init__(pattern, md)
+
+    def handleMatch(self, m: re.Match, data: str):  # noqa: N802
+        el = Element('a')
+        # if a match is empty, just ignore it silently
+        values = (('' if val is None else val) for val in m.groups())
+        el.set('href', self.url.format(m.group(0), *values))
+        el.text = m.group(0)
+        return el, m.start(0), m.end(0)
+
+
+class TildeStrikeInlineProcessor(markdown.inlinepatterns.InlineProcessor):
+    def handleMatch(self, m, data):  # noqa: N802
+        el = Element('del')
+        el.text = m.group(1)
+        return el, m.start(0), m.end(0)
+
+
+class TildeStrikeExtension(markdown.extensions.Extension):
+    def extendMarkdown(self, md):  # noqa: N802
+        md.inlinePatterns.register(TildeStrikeInlineProcessor(r'~~(.*?)~~', md), 'del', 175)
+
+
+class HTMLLinker:
+    """An HTML parser which applies autolinker rules."""
+
+    def __init__(self, rules: list[list]):
+        self.rules = rules
+
+    def _walk(self, tree_gen: t.Iterator[dict]):
+        can_parse = True
+        for item in tree_gen:
+            # we will ignore stuff inside links, to avoid nesting
+            if item['type'] in {'StartTag', 'EndTag'} and item['name'] in {'html', 'head', 'body'}:
+                pass
+            elif item['type'] == 'StartTag' and item['name'] == 'a':
+                can_parse = False
+                yield item
+            elif item['type'] == 'EndTag' and item['name'] == 'a':
+                can_parse = True
+                yield item
+            elif item['type'] == 'Characters' and can_parse:
+                text = item['data']
+
+                # "tokenize" text
+                tokens = []
+                last_idx = 0
+                for m in re.finditer(r'|'.join(f"(?:{r['regex']})" for r in self.rules), text):
+                    if m.span()[0] > last_idx:
+                        tokens.append(text[last_idx:m.span()[0]])
+                    tokens.append(m.group(0))
+                    last_idx = m.span()[1]
+                if text[last_idx:]:
+                    tokens.append(text[last_idx:])
+
+                # process each token
+                for token in tokens:
+                    for rule in self.rules:
+                        m = re.match(rule['regex'], token)
+                        if m:
+                            # if a match is empty, just ignore it silently
+                            values = (('' if val is None else val) for val in m.groups())
+                            # enclose text in a link
+                            yield {
+                                'type': 'StartTag',
+                                'name': 'a',
+                                'data': OrderedDict([((None, 'href'), rule['url'].format(m.group(0), *values))])
+                            }
+                            yield {'type': 'Characters', 'data': token}
+                            yield {'type': 'EndTag', 'name': 'a'}
+                            break
+                    else:
+                        yield {'type': 'Characters', 'data': token}
+            else:
+                yield item
+
+    def process(self, html):
+        walker = html5lib.getTreeWalker('etree')
+        serializer = html5lib.serializer.HTMLSerializer(omit_optional_tags=False)
+        return serializer.render(self._walk(walker(html5lib.parse(html))))
+
+
 # basic list of tags, used for markdown content
 BLEACH_ALLOWED_TAGS = bleach.ALLOWED_TAGS | {
     'sup', 'sub', 'small', 'br', 'p', 'table', 'thead', 'tbody', 'th', 'tr', 'td', 'img', 'hr', 'h1', 'h2', 'h3', 'h4',
-    'h5', 'h6', 'pre', 'dl', 'dd', 'dt', 'figure', 'blockquote'
+    'h5', 'h6', 'pre', 'dl', 'dd', 'dt', 'figure', 'blockquote', 'del'
 }
 BLEACH_ALLOWED_ATTRIBUTES = {**bleach.ALLOWED_ATTRIBUTES, 'img': ['src', 'alt', 'style']}
 # extended list of tags, used for HTML content
@@ -107,7 +208,6 @@ def slugify(*args, **kwargs):
     :param maxlen: Maximum slug length
     :param fallback: Fallback in case of an empty slug
     """
-
     lower = kwargs.get('lower', True)
     maxlen = kwargs.get('maxlen')
     fallback = kwargs.get('fallback', '')
@@ -164,6 +264,7 @@ def render_markdown(text, escape_latex_math=True, md=None, extra_html=False, **k
     if md is None:
         extensions = set(kwargs.pop('extensions', ()))
         extensions.add('fenced_code')
+        extensions.add(TildeStrikeExtension())
         result = markdown.markdown(text, extensions=tuple(extensions), **kwargs)
         if extra_html:
             result = sanitize_html(result)
@@ -195,6 +296,15 @@ def sanitize_for_platypus(text):
     doc = html.fromstring(res)
     doc.make_links_absolute(config.BASE_URL, resolve_base_href=False)
     return etree.tostring(doc).decode()
+
+
+def has_relative_links(html_text):
+    doc = html.fromstring(html_text)
+    return any(
+        (data := urlsplit(link)) and (not data.scheme or not data.netloc)
+        for el, attrib, link, _pos in doc.iterlinks()
+        if (el.tag, attrib) in {('a', 'href'), ('img', 'src')}
+    )
 
 
 def is_valid_mail(emails_string, multi=True):
@@ -261,7 +371,6 @@ def strip_control_chars(text):
 
 def html_color_to_rgb(hexcolor):
     """Convert #RRGGBB to an (R, G, B) tuple."""
-
     if not hexcolor.startswith('#'):
         raise ValueError(f"Invalid color string '{hexcolor}' (should start with '#')")
 
@@ -501,7 +610,7 @@ def sanitize_html(string):
 
 
 def html_to_plaintext(string):
-    """Convert HTML to plaintext.
+    r"""Convert HTML to plaintext.
 
     :param string: The HTML source string
 
@@ -522,9 +631,9 @@ class RichMarkup(Markup):
     it in a jinja template.
     """
 
-    __slots__ = ('_preformatted',)
+    __slots__ = ('_linker', '_preformatted')
 
-    def __new__(cls, content='', preformatted=None):
+    def __new__(cls, content: str = '', preformatted: t.Optional[bool] = None):
         obj = Markup.__new__(cls, content)
         if preformatted is None:
             tmp = content.lower()
@@ -568,11 +677,11 @@ def handle_legacy_description(field, obj, get_render_mode=attrgetter('render_mod
                               get_value=attrgetter('_description')):
     """Check if the object in question is using an HTML description and convert it.
 
-       The description will be automatically converted to Markdown and a warning will
-       be shown next to the field.
+    The description will be automatically converted to Markdown and a warning will
+    be shown next to the field.
 
-       :param field: the WTForms field to be checked
-       :param obj: the object whose render mode/description will be checked
+    :param field: the WTForms field to be checked
+    :param obj: the object whose render mode/description will be checked
     """
     from indico.core.db.sqlalchemy.descriptions import RenderMode
     from indico.util.i18n import _

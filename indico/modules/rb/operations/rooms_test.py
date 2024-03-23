@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -11,9 +11,6 @@ from flask import session
 from indico.modules.rb.models.rooms import Room
 from indico.modules.rb.operations.rooms import get_managed_room_ids, search_for_rooms
 from indico.modules.users import User
-
-
-pytest_plugins = 'indico.modules.rb.testing.fixtures'
 
 
 @pytest.mark.parametrize('bulk_possible', (True, False))
@@ -41,8 +38,8 @@ def test_managed_rooms(monkeypatch, bulk_possible, create_user, create_room):
 
     room_map['a'].update_principal(user_map['y'], full_access=True)
 
-    for key, user in user_map.items():
-        room_ids = [room.id for room in room_map.values() if (room.owner == user_map[key] or room.can_manage(user))]
+    for user in user_map.values():
+        room_ids = [room.id for room in room_map.values() if (room.owner == user or room.can_manage(user))]
         assert get_managed_room_ids(user) == set(room_ids)
 
 

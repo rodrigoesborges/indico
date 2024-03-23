@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -35,11 +35,7 @@ class NonBookablePeriod(db.Model):
     # - room (Room.nonbookable_periods)
 
     def __repr__(self):
-        return '<NonBookablePeriod({}, {}, {})>'.format(
-            self.room_id,
-            self.start_dt,
-            self.end_dt
-        )
+        return f'<NonBookablePeriod({self.room_id}, {self.start_dt}, {self.end_dt})>'
 
     @hybrid_method
     def overlaps(self, st, et):

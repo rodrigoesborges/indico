@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -23,9 +23,6 @@ from indico.core.oauth.scopes import SCOPES
 from indico.core.oauth.util import MAX_TOKENS_PER_SCOPE, TOKEN_PREFIX_OAUTH, save_token
 from indico.modules.users.util import merge_users
 from indico.web.flask.util import url_for
-
-
-pytest_plugins = 'indico.core.oauth.testing.fixtures'
 
 
 class MockSession:

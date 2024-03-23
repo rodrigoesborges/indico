@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -16,14 +16,17 @@ from indico.modules.categories.util import format_visibility
 from indico.modules.logs.models.entries import CategoryLogRealm, EventLogRealm, LogKind
 from indico.modules.logs.util import make_diff_log
 from indico.util.signals import make_interceptable
+from indico.util.string import crc32
 
 
 def create_category(parent, data):
     category = Category(parent=parent)
+    category.populate_from_dict(data, keys=('title',))
     data.setdefault('default_event_themes', parent.default_event_themes)
     data.setdefault('timezone', parent.timezone)
-    category.populate_from_dict(data)
     db.session.add(category)
+    db.session.flush()
+    category.populate_from_dict(data)
     db.session.flush()
     signals.category.created.send(category)
     logger.info('Category %s created by %s', category, session.user)
@@ -76,17 +79,40 @@ def update_category_protection(category, data, *, _extra_log_fields=None):
                      data={'Changes': make_diff_log(changes, log_fields)})
 
 
+def _format_wallet_credentials(credentials):
+    if not credentials:
+        return '{}'
+    keyhash = crc32(credentials.get('private_key') or '')
+    return repr({**credentials, 'private_key': f'<hidden:{keyhash}>'})
+
+
 def _log_category_update(category, changes, extra_log_fields):
+    if google_wallet_settings := changes.pop('google_wallet_settings', None):
+        google_wallet_keys = ('google_wallet_credentials', 'google_wallet_issuer_name', 'google_wallet_issuer_id')
+        for key in google_wallet_keys:
+            old = google_wallet_settings[0].get(key)
+            new = google_wallet_settings[1].get(key)
+            if old != new:
+                changes[key] = (old, new)
     log_fields = {
         'title': {'title': 'Title', 'type': 'string'},
         'description': 'Description',
         'timezone': {'title': 'Timezone', 'type': 'string'},
         'suggestions_disabled': 'Disable suggestions',
         'is_flat_view_enabled': 'Allow flat view',
+        'show_future_months': 'Future months threshold',
         'event_message_mode': 'Event header message type',
         'event_message': 'Event header message',
         'notify_managers': 'Notify managers about event creation',
         'event_creation_notification_emails': 'Event creation notification emails',
+        'google_wallet_mode': 'Google Wallet mode',
+        'google_wallet_issuer_id': {'title': 'Google Wallet Issuer ID', 'type': 'string'},
+        'google_wallet_issuer_name': {'title': 'Google Wallet Issuer name', 'type': 'string'},
+        'google_wallet_credentials': {
+            'title': 'Google Wallet credentials',
+            'type': 'text',
+            'convert': lambda changes: [_format_wallet_credentials(x) for x in changes],
+        },
         **(extra_log_fields or {})
     }
     if changes:

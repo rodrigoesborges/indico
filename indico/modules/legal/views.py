@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -30,6 +30,14 @@ class WPDisplayTOS(WPLegalMixin, WPJinjaMixin, WPDecorated):
 class WPDisplayPrivacyPolicy(WPLegalMixin, WPJinjaMixin, WPDecorated):
     def _get_breadcrumbs(self):
         return render_breadcrumbs(_('Privacy Policy'))
+
+    def _get_body(self, params):
+        return self._get_page_content(params)
+
+
+class WPDisplayAgreement(WPLegalMixin, WPJinjaMixin, WPDecorated):
+    def _get_breadcrumbs(self):
+        return render_breadcrumbs(_('Agreement'))
 
     def _get_body(self, params):
         return self._get_page_content(params)

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -35,6 +35,7 @@ from indico.modules.events.sessions.util import session_coordinator_priv_enabled
 from indico.util.iterables import materialize_iterable
 from indico.util.locators import locator_property
 from indico.util.string import format_repr, slugify
+from indico.web.flask.util import url_for
 
 
 def _get_next_friendly_id(context):
@@ -371,7 +372,7 @@ class Contribution(SearchableTitleMixin, SearchableDescriptionMixin, ProtectionM
     # - editables (Editable.contribution)
     # - legacy_mapping (LegacyContributionMapping.contribution)
     # - note (EventNote.contribution)
-    # - room_reservation_links (ReservationLink.contribution)
+    # - room_reservation_occurrence_links (ReservationOccurrenceLink.contribution)
     # - timetable_entry (TimetableEntry.contribution)
     # - vc_room_associations (VCRoomEventAssociation.linked_contrib)
 
@@ -485,7 +486,10 @@ class Contribution(SearchableTitleMixin, SearchableDescriptionMixin, ProtectionM
 
     @property
     def verbose_title(self):
-        return f'#{self.friendly_id} ({self.title})'
+        if self.code:
+            return f'#{self.friendly_id} ({self.code} - {self.title})'
+        else:
+            return f'#{self.friendly_id} ({self.title})'
 
     @property
     def paper(self):
@@ -541,6 +545,10 @@ class Contribution(SearchableTitleMixin, SearchableDescriptionMixin, ProtectionM
                 session_coordinator_priv_enabled(self.event, 'manage-contributions')):
             return True
         return False
+
+    @property
+    def url(self):
+        return url_for('contributions.display_contribution', self)
 
     def can_edit(self, user):
         # Submitters can edit their own contributions if configured
@@ -630,9 +638,8 @@ def _mapper_configured():
     def _set_timetable_entry(target, value, *unused):
         if value is None:
             target.session_block = None
-        else:
-            if target.session is not None:
-                target.session_block = value.parent.session_block
+        elif target.session is not None:
+            target.session_block = value.parent.session_block
 
     @listens_for(Contribution.duration, 'set')
     def _set_duration(target, value, oldvalue, *unused):
@@ -645,12 +652,12 @@ def _mapper_configured():
 
 @listens_for(Contribution.__table__, 'after_create')
 def _add_timetable_consistency_trigger(target, conn, **kw):
-    sql = '''
+    sql = f'''
         CREATE CONSTRAINT TRIGGER consistent_timetable
         AFTER INSERT OR UPDATE OF event_id, session_id, session_block_id, duration
-        ON {}
+        ON {target.fullname}
         DEFERRABLE INITIALLY DEFERRED
         FOR EACH ROW
         EXECUTE PROCEDURE events.check_timetable_consistency('contribution');
-    '''.format(target.fullname)
+    '''
     DDL(sql).execute(conn)

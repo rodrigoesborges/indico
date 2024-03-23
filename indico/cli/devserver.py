@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -18,32 +18,12 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.serving import WSGIRequestHandler, run_simple
 
 
-try:
-    import pywatchman
-except ImportError:
-    pywatchman = None
-
-
 def run_cmd(info, **kwargs):
-    if kwargs['reloader_type'] == 'watchman':
-        if pywatchman is None:
-            print('watchman is not available - you need to `pip install pywatchman`')
-            return
-        run_watchman()
-        return
-    elif kwargs['reloader_type'] == 'watchfiles':
+    if kwargs.pop('reloader_type') == 'watchfiles':
         run_watchfiles()
         return
+
     run_server(info, **kwargs)
-
-
-def run_watchman():
-    from .watchman import Watchman
-    try:
-        Watchman().run()
-    except pywatchman.WatchmanError as exc:
-        from indico.util.console import cformat
-        print(cformat('%{red!}watchman error: {}').format(exc))
 
 
 def run_watchfiles():
@@ -51,7 +31,7 @@ def run_watchfiles():
     Watchfiles().run()
 
 
-def run_server(info, host, port, url, ssl, ssl_key, ssl_cert, quiet, proxy, enable_evalex, evalex_from, reloader_type):
+def run_server(info, host, port, url, ssl, ssl_key, ssl_cert, quiet, proxy, enable_evalex, evalex_from):
     if port is None:
         port = 8443 if ssl else 8000
 
@@ -87,7 +67,7 @@ def run_server(info, host, port, url, ssl, ssl_key, ssl_cert, quiet, proxy, enab
         print(f' * Serving Indico on {url}')
         if evalex_whitelist:
             print(f' * Werkzeug debugger console on {url}/console')
-            if evalex_whitelist is True:  # noqa
+            if evalex_whitelist is True:
                 print(' * Werkzeug debugger console is available to all clients!')
 
     try:
@@ -106,7 +86,7 @@ def run_server(info, host, port, url, ssl, ssl_key, ssl_cert, quiet, proxy, enab
 
     app = _make_wsgi_app(info, url, evalex_whitelist, proxy)
     run_simple(host, port, app,
-               reloader_type=reloader_type, use_reloader=(reloader_type != 'none'),
+               reloader_type='none', use_reloader=False,
                use_debugger=False, use_evalex=False, threaded=True, ssl_context=ssl_ctx,
                extra_files=extra_files, request_handler=QuietWSGIRequestHandler if quiet else None)
 
@@ -151,7 +131,7 @@ def _make_indico_dispatcher(wsgi_app, path):
 
 
 # Taken from Flask - it was removed, but we want to keep the initial-lazy-loading
-# behavior to ensure fast startup e.g. after a watchman reload
+# behavior to ensure fast startup e.g. after a reload from a file change watcher
 class DispatchingApp:
     """
     Special application that dispatches to a Flask application which
@@ -225,7 +205,7 @@ class DebuggedIndico(DebuggedApplication):
     def evalex(self):
         if not self._evalex_whitelist:
             return False
-        elif self._evalex_whitelist is True:  # noqa
+        elif self._evalex_whitelist is True:
             return True
         else:
             return self._request_ip in self._evalex_whitelist

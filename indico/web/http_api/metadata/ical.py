@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -21,6 +21,7 @@ from indico.web.http_api.metadata.serializer import Serializer
 
 class vRecur(ical.vRecur):  # noqa: N801
     """Fix vRecur so the frequency comes first."""
+
     def ical(self):
         # SequenceTypes
         result = ['FREQ=%s' % self.types['FREQ'](self['FREQ']).ical()]
@@ -28,7 +29,7 @@ class vRecur(ical.vRecur):  # noqa: N801
             if key == 'FREQ':
                 continue
             typ = self.types[key]
-            if not type(vals) in ical.prop.SequenceTypes:
+            if type(vals) not in ical.prop.SequenceTypes:
                 vals = [vals]
             vals = ','.join(typ(val).ical() for val in vals)
             result.append(f'{key}={vals}')

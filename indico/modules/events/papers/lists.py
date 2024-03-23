@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -123,7 +123,7 @@ class PaperListGeneratorBase(ListGeneratorBase):
         contributions = self._filter_list_entries(contributions_query, self.list_config['filters']).all()
         selected_entry = request.args.get('selected')
         selected_entry = int(selected_entry) if selected_entry else None
-        static_item_ids, dynamic_item_ids = self._split_item_ids(list_config['items'], 'static')
+        static_item_ids = self._split_item_ids(list_config['items'], 'static')[0]
         static_columns = self._get_static_columns(static_item_ids)
         return {'contribs': contributions, 'total_entries': total_entries, 'selected_entry': selected_entry,
                 'static_columns': static_columns}
@@ -167,9 +167,7 @@ class PaperAssignmentListGenerator(PaperListGeneratorBase):
 
 
 class PaperJudgingAreaListGeneratorDisplay(PaperListGeneratorBase):
-    """
-    Listing and filtering actions in paper judging area list in the display view.
-    """
+    """Listing and filtering actions in paper judging area list in the display view."""
 
     endpoint = '.papers_list'
     list_link_type = 'paper_judging_display'

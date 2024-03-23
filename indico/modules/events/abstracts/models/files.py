@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -51,7 +51,7 @@ class AbstractFile(StoredFileMixin, db.Model):
                          'abstracts', strict_str(self.abstract.id)]
         self.assign_id()
         filename = '{}-{}'.format(self.id, secure_filename(self.filename, 'file'))
-        path = posixpath.join(*(path_segments + [filename]))
+        path = posixpath.join(*path_segments, filename)
         return config.ATTACHMENT_STORAGE, path
 
     def __repr__(self):

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -18,6 +18,7 @@ from speaklater import _LazyString
 
 class IndicoJSONEncoder(simplejson.JSONEncoder):
     """Custom JSON encoder that supports more types."""
+
     def __init__(self, *args, **kwargs):
         if kwargs.get('separators') is None:
             kwargs['separators'] = (',', ':')
@@ -44,7 +45,7 @@ class IndicoJSONProvider(JSONProvider):
     def loads(self, s: str | bytes, **kwargs: t.Any) -> t.Any:
         return simplejson.loads(s, **kwargs)
 
-    def _prepare_response_obj(self, args: t.Tuple[t.Any, ...], kwargs: t.Dict[str, t.Any]) -> t.Any:
+    def _prepare_response_obj(self, args: tuple[t.Any, ...], kwargs: dict[str, t.Any]) -> t.Any:
         if not args and not kwargs:
             return {}
         return super()._prepare_response_obj(args, kwargs)

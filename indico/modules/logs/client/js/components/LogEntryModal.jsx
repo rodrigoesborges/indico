@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -122,7 +122,7 @@ export default class LogEntryModal extends React.Component {
         <Slot name="footer">
           <div className="group flexrow f-j-space-between">
             <IButton
-              title="Previous"
+              title={Translate.string('Previous')}
               icon="prev"
               onClick={this.prevEntry}
               disabled={this._isFirstEntry()}
@@ -134,7 +134,7 @@ export default class LogEntryModal extends React.Component {
               <Translate>Related entries</Translate>
             </IButton>
             <IButton
-              title="Next"
+              title={Translate.string('Next')}
               classes={{next: true}}
               highlight
               onClick={this.nextEntry}

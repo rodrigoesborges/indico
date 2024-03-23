@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -92,6 +92,8 @@ export function roomSearchReducerFactory(namespace, extra = {}) {
         switch (action.type) {
           case actions.SEARCH_RESULTS_RECEIVED:
             return camelizeKeys(action.data);
+          case actions.SEARCH_ROOMS_ERROR:
+            return initialSearchResultsState;
           case adminActions.ROOM_DELETED:
             return initialSearchResultsState;
           case bookRoomActions.CREATE_BOOKING_SUCCESS: {

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -17,9 +17,6 @@ from indico.modules.rb.models.reservation_occurrences import ReservationOccurren
 from indico.modules.rb.models.reservations import RepeatFrequency, RepeatMapping, ReservationState
 from indico.testing.util import assert_email_snapshot
 from indico.web.flask.templating import get_template_module
-
-
-pytest_plugins = 'indico.modules.rb.testing.fixtures'
 
 
 def _assert_snapshot(snapshot, template_name, type,  suffix='', /, **context):
@@ -87,7 +84,6 @@ def test_reservation_confirmation_emails_plaintext(snapshot, snapshot_name, crea
     ('creation_email_to_user.txt', '_repeat', None, RepeatFrequency.DAY),
     ('creation_email_to_user.txt', '_repeat_excluded_1', 1, RepeatFrequency.DAY),
     ('creation_email_to_user.txt', '_repeat_excluded_2', 2, RepeatFrequency.DAY),
-    ('creation_email_to_manager.txt', '', None, RepeatFrequency.NEVER),
     ('creation_email_to_manager.txt', '_pre', None, RepeatFrequency.NEVER),
     ('creation_email_to_user.txt', '_pre', None, RepeatFrequency.NEVER),
     ('creation_email_to_user.txt', '_repeat_pre', None, RepeatFrequency.DAY),

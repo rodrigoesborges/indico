@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -15,7 +15,7 @@ from setuptools import setup
 
 def read_requirements_file(fname):
     with open(fname) as f:
-        return [dep for d in f.readlines() if (dep := d.strip()) and not (dep.startswith(('-', '#')) or '://' in dep)]
+        return [dep for d in f if (dep := d.strip()) and not (dep.startswith(('-', '#')) or '://' in dep)]
 
 
 def get_requirements(fname):
@@ -24,8 +24,8 @@ def get_requirements(fname):
 
 class BuildWithTranslations(build):
     def _compile_languages(self):
-        from babel.messages import frontend
-        compile_cmd = frontend.compile_catalog(self.distribution)
+        from babel.messages import setuptools_frontend
+        compile_cmd = setuptools_frontend.compile_catalog(self.distribution)
         self.distribution._set_command_options(compile_cmd)
         compile_cmd.finalize_options()
         compile_cmd.run()

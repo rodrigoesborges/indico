@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -13,6 +13,7 @@ import warnings
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
+from io import BytesIO
 from mimetypes import guess_extension
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlsplit
@@ -291,7 +292,8 @@ class ListGeneratorBase:
         elif separator_type == 'static':
             static_item_ids = [item_id for item_id in item_ids if item_id in self.static_items]
             return static_item_ids, [item_id for item_id in item_ids if item_id not in static_item_ids]
-        return item_ids,
+        else:
+            raise ValueError('Invalid separator_type')
 
     def _build_query(self):
         """Return the query of the list's entries.
@@ -614,8 +616,8 @@ def serialize_person_for_json_ld(person):
 
 def get_field_values(form_data):
     """Split the form fields between custom and static."""
-    fields = {x: form_data[x] for x in form_data.keys() if not x.startswith('custom_')}
-    custom_fields = {x: form_data[x] for x in form_data.keys() if x.startswith('custom_')}
+    fields = {x: form_data[x] for x in form_data if not x.startswith('custom_')}
+    custom_fields = {x: form_data[x] for x in form_data if x.startswith('custom_')}
     return fields, custom_fields
 
 
@@ -641,11 +643,9 @@ def check_permissions(event, field, allow_networks=False):
                                               allow_networks=allow_networks,
                                               event_id=event.id)
         if isinstance(principal, IPNetworkGroup) and set(permissions) - {READ_ACCESS_PERMISSION}:
-            msg = _('IP networks cannot have management permissions: {}').format(principal.name)
-            return msg
+            return _('IP networks cannot have management permissions: {}').format(principal.name)
         if isinstance(principal, RegistrationForm) and set(permissions) - {READ_ACCESS_PERMISSION}:
-            msg = _('Registrants cannot have management permissions: {}').format(principal.name)
-            return msg
+            return _('Registrants cannot have management permissions: {}').format(principal.name)
         if FULL_ACCESS_PERMISSION in permissions and len(permissions) != 1:
             # when full access permission is set, discard rest of permissions
             permissions[:] = [FULL_ACCESS_PERMISSION]
@@ -695,6 +695,9 @@ class ZipGeneratorMixin:
     def _iter_items(self, files_holder):
         yield from files_holder
 
+    def _get_item_path(self, item):
+        return item.get_local_path()
+
     def _generate_zip_file(self, files_holder, name_prefix='material', name_suffix=None, return_file=False):
         """Generate a zip file containing the files passed.
 
@@ -704,15 +707,17 @@ class ZipGeneratorMixin:
         :param name_suffix: The suffix to the zip file name
         :param return_file: Return the temp file instead of a response
         """
-
         temp_file = NamedTemporaryFile(suffix='.zip', dir=config.TEMP_DIR, delete=False)
         with ZipFile(temp_file.name, 'w', allowZip64=True) as zip_handler:
             self.used_filenames = set()
             for item in self._iter_items(files_holder):
                 name = self._prepare_folder_structure(item)
                 self.used_filenames.add(name)
-                with item.get_local_path() as filepath:
-                    zip_handler.write(filepath, name)
+                with self._get_item_path(item) as filepath:
+                    if isinstance(filepath, BytesIO):
+                        zip_handler.writestr(name, filepath.getvalue())
+                    else:
+                        zip_handler.write(filepath, name)
 
         zip_file_name = f'{name_prefix}-{name_suffix}.zip' if name_suffix else f'{name_prefix}.zip'
         chmod_umask(temp_file.name)

@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -20,3 +20,4 @@ export const hasPrivacyPolicy = ({config}) => config.data.hasPrivacyPolicy;
 export const getPrivacyPolicyHTML = ({config}) => config.data.privacyPolicyHTML;
 export const getContactEmail = ({config}) => config.data.contactEmail;
 export const hasInternalNotesEnabled = ({config}) => config.data.internalNotesEnabled;
+export const getBookingReasonRequired = ({config}) => config.data.bookingReasonRequired;

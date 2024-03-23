@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -100,7 +100,6 @@ tr.details-row {
 
 td.i-table,
 th.i-table {
-  box-sizing: border-box;
   @include ellipsis();
 
   padding: 5px 3px 5px 3px;
@@ -295,7 +294,6 @@ th {
       display: inline-block;
       float: left;
       padding: 0.4em;
-      box-sizing: border-box;
     }
 
     dt {

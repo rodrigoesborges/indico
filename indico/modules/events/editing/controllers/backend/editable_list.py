@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -40,11 +40,12 @@ archive_cache = make_scoped_cache('editables-archive')
 
 class RHEditableList(RHEditableTypeEditorBase):
     """Return the list of editables of the event for a given type."""
+
     def _process_args(self):
         RHEditableTypeEditorBase._process_args(self)
         self.contributions = (Contribution.query
                               .with_parent(self.event)
-                              .options(joinedload('editables'))
+                              .options(joinedload('editables').selectinload('revisions').selectinload('tags'))
                               .order_by(Contribution.friendly_id)
                               .all())
 

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -160,8 +160,7 @@ def service_handle_new_editable(editable, user):
         raise ServiceRequestFailed(exc)
 
 
-def service_handle_review_editable(editable, user, action, parent_revision, revision=None):
-    new_revision = revision or parent_revision
+def service_handle_review_editable(editable, user, action, parent_revision, new_revision):
     data = {
         'action': action.name,
         'revision': EditingRevisionSignedSchema().dump(new_revision),
@@ -196,11 +195,7 @@ def service_handle_review_editable(editable, user, action, parent_revision, revi
 
 
 def service_handle_delete_editable(editable):
-    path = '/event/{}/editable/{}/{}'.format(
-        _get_event_identifier(editable.event),
-        editable.type.name,
-        editable.contribution_id
-    )
+    path = f'/event/{_get_event_identifier(editable.event)}/editable/{editable.type.name}/{editable.contribution_id}'
     try:
         resp = requests.delete(_build_url(editable.event, path), headers=_get_headers(editable.event))
         resp.raise_for_status()
@@ -293,7 +288,7 @@ def _get_revision_endpoints(revision):
         'revisions': {
             'details': url_for('.api_editable', revision, _external=True),
             'replace': url_for('.api_replace_revision', revision, _external=True),
-            'undo': url_for('.api_undo_review', revision, _external=True),
+            'undo': url_for('.api_review_editable', revision, _external=True),
             'reset': url_for('.api_reset_editable', revision, _external=True),
         },
         'file_upload': url_for('.api_upload', revision, _external=True)

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -11,6 +11,7 @@ from flask import jsonify, request, session
 from marshmallow import EXCLUDE, ValidationError, fields, post_load, validates
 from werkzeug.exceptions import BadRequest
 
+from indico.core import signals
 from indico.core.db import db
 from indico.core.marshmallow import mm
 from indico.modules.events.registration import logger
@@ -142,6 +143,7 @@ class RHRegistrationFormModifyField(RHManageRegFormFieldBase):
     def _process_DELETE(self):
         if self.field.type == RegistrationFormItemType.field_pd:
             raise BadRequest
+        signals.event.registration_form_field_deleted.send(self.field)
         self.field.is_deleted = True
         update_regform_item_positions(self.regform)
         db.session.flush()
@@ -219,11 +221,13 @@ class RHRegistrationFormAddField(RHManageRegFormSectionBase):
 
 class RHRegistrationFormToggleTextState(RHRegistrationFormToggleFieldState):
     """Enable/Disable a static text field."""
+
     field_class = RegistrationFormText
 
 
 class RHRegistrationFormModifyText(RHRegistrationFormModifyField):
     """Remove/Modify a static text field."""
+
     field_class = RegistrationFormText
 
     def _process_PATCH(self):
@@ -244,6 +248,7 @@ class RHRegistrationFormModifyText(RHRegistrationFormModifyField):
 
 class RHRegistrationFormMoveText(RHRegistrationFormMoveField):
     """Change position of a static text field within the section."""
+
     field_class = RegistrationFormText
 
 

@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -18,6 +18,7 @@ import {Translate, Param, PluralTranslate} from 'indico/react/i18n';
 import {fullyOverlaps, serializeTime} from 'indico/utils/date';
 
 import {openModal} from '../../actions';
+import {renderRecurrenceWeekdays} from '../../util';
 
 import './TimelineItem.module.scss';
 
@@ -149,12 +150,7 @@ class TimelineItem extends React.Component {
           count: repeatInterval,
         });
       } else if (repeatFrequency === 'WEEK') {
-        return PluralTranslate.string(
-          'Recurs weekly',
-          'Recurs every {count} weeks',
-          repeatInterval,
-          {count: repeatInterval}
-        );
+        return Translate.string('Recurs weekly');
       } else if (repeatFrequency === 'MONTH') {
         return PluralTranslate.string(
           'Recurs monthly',
@@ -167,7 +163,8 @@ class TimelineItem extends React.Component {
       }
     }
 
-    const fmt = dayBased ? 'L' : 'L LT';
+    const hasRecurringWeekdays =
+      reservation && reservation.recurrenceWeekdays && reservation.recurrenceWeekdays.length > 0;
 
     return dayBased && !message ? null : (
       <div styleName="popup-center">
@@ -178,21 +175,43 @@ class TimelineItem extends React.Component {
         )}
         <div>{message}</div>
         {reservation && reservation.isRepeating && !hideRecurringTooltip && (
-          <Message info>
+          <Message
+            info
+            style={{marginBottom: 0, padding: '0.7rem'}}
+            attached={hasRecurringWeekdays ? 'top' : null}
+          >
             <Message.Content>
-              <Message.Header>
-                <Translate>Recurring Booking</Translate>
-              </Message.Header>
-              <Translate>
+              <Message.Header style={{fontSize: '1em'}}>
                 <Param
                   name="recurrenceFrequency"
                   value={mapRecurrenceTypeToInfo(
                     reservation.repeatFrequency,
                     reservation.repeatInterval
                   )}
-                />{' '}
-                from <Param name="startTime" value={moment(reservation.startDt).format(fmt)} /> to{' '}
-                <Param name="endTime" value={moment(reservation.endDt).format(fmt)} />
+                />
+              </Message.Header>
+              <Translate>
+                From <Param name="startTime" value={moment(reservation.startDt).format('L')} /> to{' '}
+                <Param name="endTime" value={moment(reservation.endDt).format('L')} />
+              </Translate>
+            </Message.Content>
+          </Message>
+        )}
+
+        {hasRecurringWeekdays && !hideRecurringTooltip && (
+          <Message
+            color="violet"
+            size="small"
+            style={{marginTop: 0, padding: '0.5rem'}}
+            attached="bottom"
+          >
+            <Message.Content>
+              <Translate>
+                Every{' '}
+                <Param
+                  name="weekdays"
+                  value={renderRecurrenceWeekdays(reservation.recurrenceWeekdays)}
+                />
               </Translate>
             </Message.Content>
           </Message>

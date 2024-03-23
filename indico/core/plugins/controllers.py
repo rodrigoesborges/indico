@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -25,7 +25,7 @@ class RHPluginsBase(RHAdminBase):
 
 class RHPlugins(RHPluginsBase):
     def _process(self):
-        plugins = [p for p in plugin_engine.get_active_plugins().values()]
+        plugins = list(plugin_engine.get_active_plugins().values())
         categories = defaultdict(list)
         other = []
         for plugin in plugins:

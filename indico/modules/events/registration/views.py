@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -13,7 +13,8 @@ from indico.web.views import WPJinjaMixin
 
 class WPManageRegistration(WPEventManagement):
     template_prefix = 'events/registration/'
-    bundles = ('module_events.registration.js', 'module_events.registration.css')
+    bundles = ('module_events.registration.js', 'module_events.registration.css', 'module_receipts.js',
+               'module_receipts.css')
 
     def __init__(self, rh, event_, active_menu_item=None, **kwargs):
         self.regform = kwargs.get('regform')

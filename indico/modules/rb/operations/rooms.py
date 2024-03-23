@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -53,11 +53,11 @@ def _query_managed_rooms(user):
                         RoomPrincipal.user_id == user.id,
                         RoomPrincipal.has_management_permission())]
     for group in user.local_groups:
-        criteria.append(db.and_(RoomPrincipal.type == PrincipalType.local_group,
+        criteria.append(db.and_(RoomPrincipal.type == PrincipalType.local_group,  # noqa: PERF401
                                 RoomPrincipal.local_group_id == group.id,
                                 RoomPrincipal.has_management_permission()))
     for group in user.iter_all_multipass_groups():
-        criteria.append(db.and_(RoomPrincipal.type == PrincipalType.multipass_group,
+        criteria.append(db.and_(RoomPrincipal.type == PrincipalType.multipass_group,  # noqa: PERF401
                                 RoomPrincipal.multipass_group_provider == group.provider.name,
                                 db.func.lower(RoomPrincipal.multipass_group_name) == group.name.lower(),
                                 RoomPrincipal.has_management_permission()))
@@ -178,9 +178,10 @@ def search_for_rooms(filters, allow_admin=False, availability=None):
         return query
 
     start_dt, end_dt = filters['start_dt'], filters['end_dt']
-    repeatability = (filters['repeat_frequency'], filters['repeat_interval'])
-    availability_filters = [Room.filter_available(start_dt, end_dt, repeatability, include_blockings=False,
-                                                  include_pre_bookings=False)]
+    repeatability = (filters['repeat_frequency'], filters['repeat_interval'], filters.get('recurrence_weekdays'))
+
+    availability_filters = [Room.filter_available(start_dt, end_dt, repeatability,
+                                                  include_blockings=False, include_pre_bookings=False)]
     if not (allow_admin and rb_is_admin(session.user)):
         selected_period_days = (filters['end_dt'] - filters['start_dt']).days
         booking_limit_days = db.func.coalesce(Room.booking_limit_days, rb_settings.get('booking_limit'))

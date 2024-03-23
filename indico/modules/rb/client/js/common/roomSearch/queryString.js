@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -19,6 +19,24 @@ export const rules = {
   recurrence: {
     validator: v.isIn(['single', 'daily', 'every']),
     stateField: 'filters.recurrence.type',
+  },
+  weekdays: {
+    validator: () => true,
+    stateField: {
+      serialize: ({filters}) => filters?.recurrence?.weekdays,
+      parse: (value, state) => {
+        if (!Array.isArray(value)) {
+          value = [value];
+        }
+        if (!state.filters) {
+          state.filters = {};
+        }
+        if (!state.filters.recurrence) {
+          state.filters.recurrence = {};
+        }
+        state.filters.recurrence.weekdays = [...new Set(value)];
+      },
+    },
   },
   number: {
     validator: v.isInt({min: 1, max: 99}),

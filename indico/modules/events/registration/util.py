@@ -1,13 +1,15 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
 # LICENSE file for more details.
 
+import base64
 import csv
 import dataclasses
 import itertools
+import uuid
 from operator import attrgetter
 
 from flask import json, session
@@ -29,7 +31,6 @@ from indico.modules.events.models.events import Event
 from indico.modules.events.models.persons import EventPerson
 from indico.modules.events.payment.models.transactions import TransactionStatus
 from indico.modules.events.registration import logger
-from indico.modules.events.registration.badges import RegistrantsListToBadgesPDF, RegistrantsListToBadgesPDFFoldable
 from indico.modules.events.registration.fields.accompanying import AccompanyingPersonsField
 from indico.modules.events.registration.fields.choices import (AccommodationField, ChoiceBaseField,
                                                                get_field_merged_options)
@@ -49,7 +50,7 @@ from indico.modules.users.util import get_user_by_email
 from indico.util.countries import get_country_reverse
 from indico.util.date_time import format_date, now_utc
 from indico.util.i18n import _
-from indico.util.signals import values_from_signal
+from indico.util.signals import make_interceptable, values_from_signal
 from indico.util.spreadsheets import csv_text_io_wrapper, unique_col
 from indico.util.string import camelize_keys, validate_email, validate_email_verbose
 
@@ -136,7 +137,7 @@ def get_title_uuid(regform, title):
 
 
 def get_country_field(regform):
-    """Get the country personal-data field of a regform"""
+    """Get the country personal-data field of a regform."""
     return next((x
                  for x in regform.active_fields
                  if (x.type == RegistrationFormItemType.field_pd and
@@ -157,6 +158,7 @@ def get_flat_section_positions_setup_data(regform):
     return {'sections': section_data, 'items': item_data}
 
 
+@make_interceptable
 def get_flat_section_submission_data(regform, *, management=False, registration=None):
     section_data = {s.id: camelize_keys(s.own_data) for s in regform.active_sections
                     if management or not s.is_manager_only}
@@ -198,7 +200,7 @@ def get_user_data(regform, user, invitation=None):
         user_data = {}
     else:
         user_data = {t.name: getattr(user, t.name, None) for t in PersonalDataType
-                     if t.name != 'title' and getattr(user, t.name, None)}
+                     if t.name not in {'title', 'picture'} and getattr(user, t.name, None)}
         if (
             (country_field := get_country_field(regform)) and
             country_field.data.get('use_affiliation_country') and
@@ -270,38 +272,40 @@ def check_registration_email(regform, email, registration=None, management=False
         return sorted(extra_checks, key=lambda x: ['error', 'warning', 'ok'].index(x['status']))[0]
     if registration is not None:
         if email_registration and email_registration != registration:
-            return dict(status='error', conflict='email-already-registered')
+            return {'status': 'error', 'conflict': 'email-already-registered'}
         elif user_registration and user_registration != registration:
-            return dict(status='error', conflict='user-already-registered')
+            return {'status': 'error', 'conflict': 'user-already-registered'}
         elif user and registration.user and registration.user != user:
-            return dict(status='warning' if management else 'error', conflict='email-other-user', user=user.full_name)
+            return {'status': 'warning' if management else 'error', 'conflict': 'email-other-user',
+                    'user': user.full_name}
         elif not user and registration.user:
-            return dict(status='warning' if management else 'error', conflict='email-no-user',
-                        user=registration.user.full_name)
+            return {'status': 'warning' if management else 'error', 'conflict': 'email-no-user',
+                    'user': registration.user.full_name}
         elif user:
-            return dict(status='ok', user=user.full_name, self=(not management and user == session.user),
-                        same=(user == registration.user))
+            return {'status': 'ok', 'user': user.full_name, 'self': (not management and user == session.user),
+                    'same': user == registration.user}
         email_err = validate_email_verbose(email)
         if email_err:
-            return dict(status='error', conflict='email-invalid', email_error=email_err)
+            return {'status': 'error', 'conflict': 'email-invalid', 'email_error': email_err}
         if regform.require_user and (management or email != registration.email):
-            return dict(status='warning' if management else 'error', conflict='no-user')
+            return {'status': 'warning' if management else 'error', 'conflict': 'no-user'}
         else:
-            return dict(status='ok', user=None)
+            return {'status': 'ok', 'user': None}
     else:
         if email_registration:
-            return dict(status='error', conflict='email-already-registered')
+            return {'status': 'error', 'conflict': 'email-already-registered'}
         elif user_registration:
-            return dict(status='error', conflict='user-already-registered')
+            return {'status': 'error', 'conflict': 'user-already-registered'}
         elif user:
-            return dict(status='ok', user=user.full_name, self=(not management and user == session.user), same=False)
+            return {'status': 'ok', 'user': user.full_name, 'self': not management and user == session.user,
+                    'same': False}
         email_err = validate_email_verbose(email)
         if email_err:
-            return dict(status='error', conflict='email-invalid', email_error=email_err)
+            return {'status': 'error', 'conflict': 'email-invalid', 'email_error': email_err}
         if regform.require_user:
-            return dict(status='warning' if management else 'error', conflict='no-user')
+            return {'status': 'warning' if management else 'error', 'conflict': 'no-user'}
         else:
-            return dict(status='ok', user=None)
+            return {'status': 'ok', 'user': None}
 
 
 class RegistrationSchemaBase(IndicoSchema):
@@ -395,8 +399,8 @@ def create_registration(regform, data, invitation=None, management=False, notify
         value = data.get(form_item.html_field_name, default) if can_modify else default
         data_entry = RegistrationData()
         registration.data.append(data_entry)
-        for attr, value in form_item.field_impl.process_form_data(registration, value).items():
-            setattr(data_entry, attr, value)
+        for attr, field_value in form_item.field_impl.process_form_data(registration, value).items():
+            setattr(data_entry, attr, field_value)
         if form_item.type == RegistrationFormItemType.field_pd and form_item.personal_data_type.column:
             setattr(registration, form_item.personal_data_type.column, value)
     if invitation is None:
@@ -413,7 +417,7 @@ def create_registration(regform, data, invitation=None, management=False, notify
     registration.sync_state(_skip_moderation=skip_moderation)
     db.session.flush()
     signals.event.registration_created.send(registration, management=management, data=data)
-    notify_registration_creation(registration, notify_user)
+    notify_registration_creation(registration, notify_user=notify_user, from_management=management)
     logger.info('New registration %s by %s', registration, user)
     registration.log(EventLogRealm.management if management else EventLogRealm.participants,
                      LogKind.positive, 'Registration',
@@ -482,7 +486,8 @@ def modify_registration(registration, data, management=False, notify_user=True):
 
     new_data = snapshot_registration_data(registration)
     diff = diff_registration_data(old_data, new_data)
-    notify_registration_modification(registration, notify_user, diff=diff, old_price=old_price)
+    notify_registration_modification(registration, notify_user=notify_user, diff=diff, old_price=old_price,
+                                     from_management=management)
     logger.info('Registration %s modified by %s', registration, session.user)
     registration.log(EventLogRealm.management if management else EventLogRealm.participants,
                      LogKind.change, 'Registration',
@@ -564,7 +569,16 @@ def get_registrations_with_tickets(user, event):
                      ~RegistrationForm.is_deleted,
                      ~Registration.is_deleted)
              .join(Registration.registration_form))
-    return [r for r in query if not r.is_ticket_blocked]
+
+    cached_templates = {}
+
+    def _is_ticket_blocked(registration):
+        regform = registration.registration_form
+        if regform not in cached_templates:
+            cached_templates[regform] = regform.get_ticket_template()
+        return cached_templates[regform].is_ticket and registration.is_ticket_blocked
+
+    return [r for r in query if not _is_ticket_blocked(r)]
 
 
 def get_published_registrations(event, is_participant):
@@ -665,6 +679,51 @@ def build_registration_api_data(registration):
     return registration_info
 
 
+def get_ticket_qr_code_data(person):
+    """Get the data which will be saved in a ticket QR code.
+
+    QR code format:
+
+    {
+        'i': [qr_code_version, indico_url, b64(checkin_secret), b64(person_id)],
+        # extra keys may be added by plugins (e.g. site access)
+    }
+
+    This format tries to be as compact as possible so that the resulting QR codes
+    are small and easy to scan. However, we need to stick with a JSON dictionary in
+    order to be compatible with the site access plugin which inserts an extra key
+    with the ADaMS URL.
+
+    Note that `person_id` is only included if this is a ticket for an accompanying person.
+
+    The checkin secret and person id (if present) is base64-encoded to save space
+    (see https://stackoverflow.com/a/53136913/3911147).
+
+    If Indico is running on HTTPS, the scheme ('https://') is stripped from the
+    URL to save a few extra bytes.
+    """
+    registration = person['registration']
+    is_accompanying = person['is_accompanying']
+    person_id = person['id']
+    checkin_secret = person['registration'].ticket_uuid
+
+    qr_code_version = 2  # Increment this if the QR code format changes
+    url = config.BASE_URL.removeprefix('https://')
+
+    data = {
+        'i': [qr_code_version, url, _base64_encode_uuid(checkin_secret)]
+    }
+    if is_accompanying:
+        data['i'].append(_base64_encode_uuid(person_id))
+
+    signals.event.registration.generate_ticket_qr_code.send(registration, person=person, ticket_data=data)
+    return data
+
+
+def _base64_encode_uuid(uid):
+    return base64.b64encode(uuid.UUID(uid).bytes).decode('ascii')
+
+
 def generate_ticket_qr_code(person):
     """Generate a Pillow `Image` with a QR Code encoding a check-in ticket.
 
@@ -676,20 +735,8 @@ def generate_ticket_qr_code(person):
         box_size=3,
         border=1
     )
-    registration = person['registration']
-    # accompanying persons check-in is not supported
-    checkin_secret = person['registration'].ticket_uuid if not person['is_accompanying'] else ''
-    qr_data = {
-        'registrant_id': person['id'],
-        'regform_id': registration.registration_form_id,
-        'checkin_secret': checkin_secret,
-        'event_id': str(registration.event.id),
-        'server_url': config.BASE_URL,
-        'version': 1
-    }
-    signals.event.registration.generate_ticket_qr_code.send(registration, person=person, ticket_data=qr_data)
-    json_qr_data = json.dumps(qr_data)
-    qr.add_data(json_qr_data)
+    data = get_ticket_qr_code_data(person)
+    qr.add_data(json.dumps(data, separators=(',', ':')))
     qr.make(fit=True)
     return qr.make_image()._img
 
@@ -749,10 +796,9 @@ def get_event_regforms_registrations(event, user, include_scheduled=True, only_i
 
 
 def generate_ticket(registration):
-    from indico.modules.designer.util import get_default_ticket_on_category
+    from indico.modules.events.registration.badges import RegistrantsListToBadgesPDF, RegistrantsListToBadgesPDFFoldable
     from indico.modules.events.registration.controllers.management.tickets import DEFAULT_TICKET_PRINTING_SETTINGS
-    template = (registration.registration_form.ticket_template or
-                get_default_ticket_on_category(registration.event.category))
+    template = registration.registration_form.get_ticket_template()
     registrations = [registration]
     signals.event.designer.print_badge_template.send(template, regform=registration.registration_form,
                                                      registrations=registrations)
@@ -781,13 +827,14 @@ def update_regform_item_positions(regform):
             child.position = next(positions if child_active else disabled_positions)
 
 
-def create_invitation(regform, user, skip_moderation, email_from, email_subject, email_body):
+def create_invitation(regform, user, email_from, email_subject, email_body, *, skip_moderation, skip_access_check):
     invitation = RegistrationInvitation(
-        skip_moderation=skip_moderation,
         email=user['email'],
         first_name=user['first_name'],
         last_name=user['last_name'],
-        affiliation=user['affiliation']
+        affiliation=user['affiliation'],
+        skip_moderation=skip_moderation,
+        skip_access_check=skip_access_check,
     )
     regform.invitations.append(invitation)
     db.session.flush()
@@ -819,8 +866,8 @@ def import_registrations_from_csv(regform, fileobj, skip_moderation=True, notify
             for data in user_records]
 
 
-def import_invitations_from_csv(regform, fileobj, email_from, email_subject, email_body,
-                                skip_moderation=True, skip_existing=False):
+def import_invitations_from_csv(regform, fileobj, email_from, email_subject, email_body, *,
+                                skip_moderation=True, skip_access_check=True, skip_existing=False):
     """Import invitations from a CSV file.
 
     :return: A list of invitations and the number of skipped records which
@@ -857,7 +904,8 @@ def import_invitations_from_csv(regform, fileobj, email_from, email_subject, ema
 
         filtered_records.append(user)
 
-    invitations = [create_invitation(regform, user, skip_moderation, email_from, email_subject, email_body)
+    invitations = [create_invitation(regform, user, email_from, email_subject, email_body,
+                                     skip_moderation=skip_moderation, skip_access_check=skip_access_check)
                    for user in filtered_records]
     skipped_records = len(user_records) - len(filtered_records)
     return invitations, skipped_records
@@ -918,3 +966,22 @@ def close_registration(regform):
     regform.end_dt = now_utc()
     if not regform.has_started:
         regform.start_dt = regform.end_dt
+
+
+def get_persons(registrations, include_accompanying_persons=False):
+    persons = []
+    for registration in registrations:
+        persons.append({
+            'id': registration.id,
+            'first_name': registration.first_name,
+            'last_name': registration.last_name,
+            'registration': registration,
+            'is_accompanying': False,
+        })
+        if include_accompanying_persons:
+            persons.extend({'id': person['id'],
+                            'first_name': person['firstName'],
+                            'last_name': person['lastName'],
+                            'registration': registration,
+                            'is_accompanying': True} for person in registration.accompanying_persons)
+    return persons

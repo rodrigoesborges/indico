@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -7,7 +7,6 @@
 
 # flake8: noqa
 
-import cgi
 import math
 import os
 import xml.sax.saxutils as saxutils
@@ -58,17 +57,10 @@ def _is_string_html(s):
 
 def escape(text):
     if text is None:
-        text = ''
-    try:
-        if _is_string_html(text):
-            text = sanitize_for_platypus(text)
-        else:
-            text = cgi.escape(text)
-            text = text.replace('\r\n', ' <br/>')
-            text = text.replace('\n', ' <br/>')
-            text = text.replace('\r', ' <br/>')
-        return text
-    except Exception:
+        return ''
+    if _is_string_html(text):
+        return sanitize_for_platypus(text)
+    else:
         return saxutils.escape(text)
 
 

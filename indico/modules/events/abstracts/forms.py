@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -540,7 +540,7 @@ class _SingleChoiceQuerySelectMultipleField(IndicoQuerySelectMultipleField):
     widget = Select()
 
     def iter_choices(self):
-        yield ('__None', self.blank_text, self.data is None)
+        yield ('__None', self.blank_text, self.data is None, {})
         yield from super().iter_choices()
 
     def process_formdata(self, valuelist):
@@ -664,6 +664,7 @@ class AbstractsScheduleForm(IndicoForm):
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop('event')
+        self.timezone = self.event.timezone
         super().__init__(*args, **kwargs)
 
 

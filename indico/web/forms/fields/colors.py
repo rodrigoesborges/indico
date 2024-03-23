@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -36,7 +36,7 @@ class IndicoPalettePickerField(JSONField):
     def process_data(self, value):
         super().process_data(value)
         if self.object_data and self.object_data not in self.color_list:
-            self.color_list = self.color_list + [self.object_data]
+            self.color_list = [*self.color_list, self.object_data]
 
     def _value(self):
         return self.data._asdict()

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -11,7 +11,7 @@ from wtforms.validators import DataRequired, InputRequired, NumberRange
 from indico.util.i18n import _
 from indico.web.forms.base import IndicoForm
 from indico.web.forms.validators import HiddenUnless
-from indico.web.forms.widgets import CKEditorWidget, SwitchWidget
+from indico.web.forms.widgets import SwitchWidget, TinyMCEWidget
 
 
 class NewsSettingsForm(IndicoForm):
@@ -29,4 +29,4 @@ class NewsSettingsForm(IndicoForm):
 
 class NewsForm(IndicoForm):
     title = StringField(_('Title'), [DataRequired()])
-    content = TextAreaField(_('Content'), [DataRequired()], widget=CKEditorWidget(images=True))
+    content = TextAreaField(_('Content'), [DataRequired()], widget=TinyMCEWidget(images=True))

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -234,6 +234,7 @@ def setup_jinja(app):
     app.add_template_filter(date_time_util.format_human_timedelta)
     app.add_template_filter(date_time_util.format_pretty_date)
     app.add_template_filter(date_time_util.format_pretty_datetime)
+    app.add_template_filter(date_time_util.server_to_utc)
     app.add_template_filter(lambda d: Markup(html_params(**d)), 'html_params')
     app.add_template_filter(underline)
     app.add_template_filter(markdown)
@@ -362,7 +363,7 @@ def add_plugin_blueprints(app):
 
 def canonicalize_url():
     url_root = request.url_root.rstrip('/')
-    if config.BASE_URL != url_root:
+    if url_root != config.BASE_URL:
         Logger.get('flask').info('Received request with invalid url root for %s', request.url)
         return render_template('bad_url_error.html'), 404
 

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -67,7 +67,7 @@ def render_session_bar(protected_object=None, local_tz=None, force_local_tz=Fals
     active_tz = _get_timezone_display(local_tz, session.timezone, force_local_tz)
     timezones = common_timezones
     if active_tz not in common_timezones_set:
-        timezones = list(common_timezones) + [active_tz]
+        timezones = [*common_timezones, active_tz]
     timezone_data = {
         'disabled': force_local_tz,
         'user_tz': user_tz,
@@ -161,7 +161,7 @@ class WPJinjaMixin:
 
 class WPBundleMixin:
     bundles = ('exports.js', 'common-runtime.js')
-    print_bundles = tuple()
+    print_bundles = ()
 
     @classproperty
     @classmethod
@@ -200,6 +200,12 @@ class WPBundleMixin:
             }
         }
 
+    @classproperty
+    @classmethod
+    def tinymce_content_css_urls(cls):
+        tinymce_css_bundles = ('common.css', 'react.css', 'semantic-ui.css', 'jquery.css', 'main.css')
+        return list(itertools.chain.from_iterable(current_app.manifest[x] for x in tinymce_css_bundles))
+
 
 class WPBase(WPBundleMixin):
     title = ''
@@ -222,10 +228,9 @@ class WPBase(WPBundleMixin):
     @classproperty
     @classmethod
     def bundles(cls):
-        _bundles = ('common.css', 'common.js', 'react.css', 'react.js', 'semantic-ui.js', 'semantic-ui.css',
-                    'jquery.css', 'jquery.js', 'main.css', 'main.js', 'module_core.js', 'module_events.creation.js',
-                    'module_attachments.js', 'outdatedbrowser.js', 'outdatedbrowser.css')
-        return _bundles
+        return ('common.css', 'common.js', 'react.css', 'react.js', 'semantic-ui.js', 'semantic-ui.css',
+                'jquery.css', 'jquery.js', 'main.css', 'main.js', 'module_core.js', 'module_events.creation.js',
+                'module_attachments.js', 'outdatedbrowser.js', 'outdatedbrowser.css')
 
     def _get_head_content(self):
         """Return _additional_ content between <head></head> tags.
@@ -253,7 +258,7 @@ class WPBase(WPBundleMixin):
 
     def display(self, **params):
         from indico.modules.admin import RHAdminBase
-        from indico.modules.core.settings import core_settings, social_settings
+        from indico.modules.core.settings import core_settings
 
         title_parts = [*self._extra_title_parts, self.title]
         if self.MANAGEMENT:
@@ -278,18 +283,18 @@ class WPBase(WPBundleMixin):
         return render_template('indico_base.html',
                                css_files=css_files, js_files=js_files,
                                bundles=bundles, print_bundles=print_bundles,
+                               tinymce_content_css_urls=self.tinymce_content_css_urls,
                                site_name=core_settings.get('site_title'),
-                               social=social_settings.get_all(),
                                page_metadata=self.page_metadata,
                                page_title=' - '.join(str(x) for x in title_parts if x),
                                head_content=self._get_head_content(),
-                               body=body)
+                               body=body, wp_class=type(self))
 
 
 class WPNewBase(WPBundleMixin, WPJinjaMixin):
     title = ''
     bundles = ('outdatedbrowser.js', 'outdatedbrowser.css')
-    print_bundles = tuple()
+    print_bundles = ()
 
     #: Whether the WP is used for management (adds suffix to page title)
     MANAGEMENT = False
@@ -310,7 +315,7 @@ class WPNewBase(WPBundleMixin, WPJinjaMixin):
     @classmethod
     def display(cls, template_name, **params):
         from indico.modules.admin import RHAdminBase
-        from indico.modules.core.settings import core_settings, social_settings
+        from indico.modules.core.settings import core_settings
 
         title_parts = [cls.title]
         if cls.MANAGEMENT:
@@ -335,9 +340,10 @@ class WPNewBase(WPBundleMixin, WPJinjaMixin):
                                css_files=css_files, js_files=js_files,
                                page_metadata=cls.page_metadata,
                                bundles=bundles, print_bundles=print_bundles,
+                               tinymce_content_css_urls=cls.tinymce_content_css_urls,
                                site_name=core_settings.get('site_title'),
-                               social=social_settings.get_all(),
                                page_title=' - '.join(str(x) for x in title_parts if x),
+                               wp_class=cls,
                                **params)
 
 
@@ -352,7 +358,7 @@ class WPDecorated(WPBase):
 
     def _apply_decoration(self, body):
         breadcrumbs = self._get_breadcrumbs()
-        return '<div class="header">{}</div>\n<div class="main">{}<div>{}</div></div>\n{}'.format(
+        return '<div class="header">{}</div>\n<main class="main">{}<div>{}</div></main>\n{}'.format(
             self._get_header(), breadcrumbs, body, self._get_footer())
 
     def _display(self, params):

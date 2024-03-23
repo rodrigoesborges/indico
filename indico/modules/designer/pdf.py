@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -130,7 +130,7 @@ class DesignerPDFBase:
 
         if isinstance(content, Image.Image):
             canvas.drawImage(ImageReader(content), margin_x + item_x, self.height - margin_y - item_height - item_y,
-                             item_width, item_height, mask='auto')
+                             item_width, item_height, mask='auto', preserveAspectRatio=True)
         else:
             content = content.unescape() if isinstance(content, RichMarkup) else content
             content = sanitize_html(strip_tags(content))

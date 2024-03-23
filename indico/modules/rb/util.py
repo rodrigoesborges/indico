@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -28,10 +28,13 @@ from indico.modules.events.timetable.models.entries import TimetableEntry
 from indico.modules.events.timetable.util import find_latest_entry_end_dt
 from indico.util.caching import memoize_request
 from indico.util.date_time import now_utc, server_to_utc
+from indico.util.i18n import _
 from indico.util.iterables import group_list
 from indico.util.string import crc32
+from indico.web.util import ExpectedError
 
 
+WEEKDAYS = ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')
 ROOM_PHOTO_DIMENSIONS = (290, 170)
 TempReservationOccurrence = namedtuple('ReservationOccurrenceTmp', ('start_dt', 'end_dt', 'reservation'))
 TempReservationConcurrentOccurrence = namedtuple('ReservationOccurrenceTmp', ('start_dt', 'end_dt', 'reservations'))
@@ -52,9 +55,19 @@ def rb_check_user_access(user):
 def rb_is_admin(user):
     """Check if the user is a room booking admin."""
     from indico.modules.rb import rb_settings
+    if user is None:
+        return False
     if user.is_admin:
         return True
     return rb_settings.acls.contains_user('admin_principals', user)
+
+
+def rb_check_if_visible(user):
+    """Check if user should see links to the room booking system."""
+    from indico.modules.rb import rb_settings
+    if not rb_settings.get('hide_module_if_unauthorized'):
+        return True
+    return rb_check_user_access(user)
 
 
 def build_rooms_spritesheet():
@@ -183,8 +196,8 @@ def serialize_booking_details(booking):
     attributes = reservation_details_schema.dump(booking)
     date_range, occurrences = get_booking_occurrences(booking)
     booking_details = dict(attributes)
-    occurrences_by_type = dict(bookings={}, cancellations={}, rejections={}, other={}, blockings={},
-                               unbookable_hours={}, nonbookable_periods={}, overridable_blockings={})
+    occurrences_by_type = {'bookings': {}, 'cancellations': {}, 'rejections': {}, 'other': {}, 'blockings': {},
+                           'unbookable_hours': {}, 'nonbookable_periods': {}, 'overridable_blockings': {}}
     booking_details['occurrences'] = occurrences_by_type
     booking_details['date_range'] = [dt.isoformat() for dt in date_range]
     for dt, [occ] in occurrences.items():
@@ -270,12 +283,12 @@ def get_booking_params_for_event(event):
 
     :param event: `Event` object
     """
+    data = {'params': {'link_type': 'event',
+                       'link_id': event.id,
+                       'text': f'#{event.room.id}' if event.room else None}}
+
+    # Calculate type of booking options
     is_single_day = event.start_dt_local.date() == event.end_dt_local.date()
-    params = {
-        'link_type': 'event',
-        'link_id': event.id,
-        'text': f'#{event.room.id}' if event.room else None,
-    }
     all_times = {day: (_find_first_entry_start_dt(event, day), _find_latest_entry_end_dt(event, day))
                  for day in event.iter_days(tzinfo=event.tzinfo)}
     # if the timetable is empty on a given day, use (start_dt, end_dt) of the event
@@ -283,27 +296,26 @@ def get_booking_params_for_event(event):
                  for day, times in all_times.items()]
     same_times = len({times for (_, times) in all_times}) == 1
 
-    if is_single_day or same_times:
-        params['sd'] = event.start_dt_local.date().isoformat()
-        if event.start_dt_local.time() < event.end_dt_local.time():
-            # if we have suitable times we provide enough data to immediately run a search.
-            # XXX: if filtersAreSet also checked for times we could provide dates/recurrence
-            # as well even when we don't know suitable times.. but that would require extra
-            # code to handle the case of a custom RB interface where no times are used at all
-            params.update({
-                'ed': None if is_single_day else event.end_dt_local.date().isoformat(),
-                'recurrence': 'single' if is_single_day else 'daily',
-                'st': event.start_dt_local.strftime('%H:%M'),
-                'et': event.end_dt_local.strftime('%H:%M'),
-                'number': 1,
-                'interval': 'week',
-            })
-        return {
-            'type': 'same_times',
-            'params': params
-        }
-    else:
-        time_info = sorted(
+    # Generate parameters for all-days bookings
+    all_days_params = {'sd': event.start_dt_local.date().isoformat()}
+    if event.start_dt_local.time() < event.end_dt_local.time():
+        # if we have suitable times we provide enough data to immediately run a search.
+        # XXX: if filtersAreSet also checked for times we could provide dates/recurrence
+        # as well even when we don't know suitable times.. but that would require extra
+        # code to handle the case of a custom RB interface where no times are used at all
+        all_days_params.update({
+            'ed': None if is_single_day else event.end_dt_local.date().isoformat(),
+            'recurrence': 'single' if is_single_day else 'daily',
+            'st': event.start_dt_local.strftime('%H:%M'),
+            'et': event.end_dt_local.strftime('%H:%M'),
+            'number': 1,
+            'interval': 'week',
+        })
+    data['all_days_params'] = all_days_params
+
+    # Generate parameters for per-day bookings
+    if not is_single_day and not same_times:
+        per_day_params = sorted(
             (day, {
                 # if we have a proper start/end time, we provide all args to search
                 'number': 1,
@@ -318,14 +330,55 @@ def get_booking_params_for_event(event):
                 'sd': day.isoformat(),
             }) for day, (start, end) in all_times
         )
-        return {
-            'type': 'mixed_times',
-            'params': params,
-            'time_info': time_info
-        }
+        data['per_day_params'] = per_day_params
+
+    return data
 
 
 def get_prebooking_collisions(reservation):
     from indico.modules.rb.models.reservation_occurrences import ReservationOccurrence
     valid_occurrences = reservation.occurrences.filter(ReservationOccurrence.is_valid).all()
     return ReservationOccurrence.find_overlapping_with(reservation.room, valid_occurrences, reservation.id).all()
+
+
+def check_impossible_repetition(data):
+    """Check for broken repetition data.
+
+    This checks that a repetition using weekdays has a date range
+    containing at least one of the specified weekdays.
+    """
+    from indico.modules.rb.models.reservation_occurrences import ReservationOccurrence
+    try:
+        start_dt, end_dt = data['start_dt'], data['end_dt']
+        repetition = data['repeat_frequency'], data['repeat_interval'], data['recurrence_weekdays']
+    except KeyError:
+        return
+    if not any(ReservationOccurrence.iter_start_time(start_dt, end_dt, repetition)):
+        raise ExpectedError(_('The chosen date range does not include any of the weekdays you specified.'))
+
+
+def check_empty_candidates(candidates):
+    """Check for empty candidates.
+
+    This checks that a created time-series has at least one occurrence to filter by (similar to
+    :func:`check_impossible_repetition` but without the need to pass all the data).
+    """
+    if not candidates:
+        raise ExpectedError(_('The chosen date range does not include any of the weekdays you specified.'))
+
+
+def format_weekdays(weekdays):
+    """Format a list of weekdays into a nice readable string."""
+    assert weekdays
+    return ', '.join(x.capitalize() for x in sorted(weekdays, key=lambda x: WEEKDAYS.index(x)))
+
+
+def check_repeat_frequency(old_frequency, new_frequency):
+    """Prevent changing the repeat frequency of an existing booking."""
+    from indico.modules.rb.models.reservations import RepeatFrequency
+
+    if (
+        (old_frequency == RepeatFrequency.WEEK and new_frequency == RepeatFrequency.MONTH) or
+        (old_frequency == RepeatFrequency.MONTH and new_frequency == RepeatFrequency.WEEK)
+    ):
+        raise ExpectedError(_('You cannot modify the repeat frequency of an existing booking.'))

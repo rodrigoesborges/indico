@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -50,7 +50,7 @@ class EventSetting(JSONSettingsBase, EventSettingsMixin, db.Model):
     @strict_classproperty
     @staticmethod
     def __auto_table_args():
-        return db.UniqueConstraint('event_id', 'module', 'name'),
+        return (db.UniqueConstraint('event_id', 'module', 'name'),)
 
     @declared_attr
     def __table_args__(cls):

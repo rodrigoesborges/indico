@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -104,6 +104,7 @@ export default function PersonDetailsModal({
   otherPersons,
   hideEmailField,
   validateEmailUrl,
+  extraParams,
 }) {
   return (
     <FinalModalForm
@@ -138,10 +139,12 @@ export default function PersonDetailsModal({
             placeholder={Translate.string('None')}
           />
         </Form.Field>
-        <Form.Field>
-          <Translate as="label">Affiliation</Translate>
-          <FinalAffiliationField hasPredefinedAffiliations={hasPredefinedAffiliations} />
-        </Form.Field>
+        {!extraParams?.disableAffiliations && (
+          <Form.Field>
+            <Translate as="label">Affiliation</Translate>
+            <FinalAffiliationField hasPredefinedAffiliations={hasPredefinedAffiliations} />
+          </Form.Field>
+        )}
       </Form.Group>
       <Form.Group widths="equal">
         <Form.Field>
@@ -181,6 +184,7 @@ PersonDetailsModal.propTypes = {
   hasPredefinedAffiliations: PropTypes.bool.isRequired,
   hideEmailField: PropTypes.bool,
   validateEmailUrl: PropTypes.string,
+  extraParams: PropTypes.object,
 };
 
 PersonDetailsModal.defaultProps = {
@@ -188,6 +192,7 @@ PersonDetailsModal.defaultProps = {
   otherPersons: [],
   hideEmailField: false,
   validateEmailUrl: null,
+  extraParams: {},
 };
 
 function EmailField({validateUrl, person, otherPersons}) {

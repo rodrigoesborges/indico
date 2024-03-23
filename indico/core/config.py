@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -12,7 +12,7 @@ import re
 import socket
 import warnings
 from datetime import timedelta
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import pytz
 from celery.schedules import crontab
@@ -26,6 +26,7 @@ from indico.util.packaging import package_is_editable
 from indico.util.string import crc32, snakify
 
 
+# Note: Whenever you add/change something here, you MUST update the docs (settings.rst) as well
 DEFAULTS = {
     'ATTACHMENT_STORAGE': 'default',
     'AUTH_PROVIDERS': {},
@@ -35,6 +36,7 @@ DEFAULTS = {
     'CELERY_BROKER': None,
     'CELERY_CONFIG': {},
     'CELERY_RESULT_BACKEND': None,
+    'CHECKIN_APP_URL': 'https://checkin.getindico.io',
     'COMMUNITY_HUB_URL': 'https://hub.getindico.io',
     'CUSTOMIZATION_DEBUG': False,
     'CUSTOMIZATION_DIR': None,
@@ -46,6 +48,7 @@ DEFAULTS = {
     'DEFAULT_TIMEZONE': 'UTC',
     'DISABLE_CELERY_CHECK': None,
     'EMAIL_BACKEND': 'indico.vendor.django_mail.backends.smtp.EmailBackend',
+    'ENABLE_GOOGLE_WALLET': False,
     'ENABLE_ROOMBOOKING': False,
     'EXPERIMENTAL_EDITING_SERVICE': False,
     'EXTERNAL_REGISTRATION_URL': None,
@@ -57,8 +60,10 @@ DEFAULTS = {
     'LOCAL_REGISTRATION': True,
     'LOCAL_GROUPS': True,
     'LOGGING_CONFIG_FILE': 'logging.yaml',
+    'LOGIN_LOGO_URL': None,
     'LOGO_URL': None,
     'LOG_DIR': '/opt/indico/log',
+    'MAX_DATA_EXPORT_SIZE': 10 * 1024,  # 10GB
     'MAX_UPLOAD_FILES_TOTAL_SIZE': 0,
     'MAX_UPLOAD_FILE_SIZE': 0,
     'MEMCACHED_SERVERS': [],
@@ -99,6 +104,7 @@ DEFAULTS = {
     'SYSTEM_NOTICES_URL': 'https://getindico.io/notices.yml',
     'TEMP_DIR': '/opt/indico/tmp',
     'USE_PROXY': False,
+    'WALLET_LOGO_URL': None,
     'WORKER_NAME': socket.getfqdn(),
     'XELATEX_PATH': None,
 }
@@ -148,8 +154,7 @@ def _parse_config(path):
     globals_ = {'timedelta': timedelta, 'crontab': crontab}
     locals_ = {}
     with codecs.open(path, encoding='utf-8') as config_file:
-        # XXX: unicode_literals is inherited from this file
-        exec(compile(config_file.read(), path, 'exec'), globals_, locals_)
+        exec(compile(config_file.read(), path, 'exec'), globals_, locals_)  # noqa: S102
     return {str(k if k.isupper() else _convert_key(k)): v
             for k, v in locals_.items()
             if k[0] != '_'}
@@ -264,6 +269,14 @@ class IndicoConfig:
     @property
     def LATEX_ENABLED(self):
         return bool(self.XELATEX_PATH)
+
+    @property
+    def ABSOLUTE_LOGO_URL(self):
+        return urljoin(self.BASE_URL, self.LOGO_URL) if self.LOGO_URL else None
+
+    @property
+    def ABSOLUTE_WALLET_LOGO_URL(self):
+        return urljoin(self.BASE_URL, self.WALLET_LOGO_URL) if self.WALLET_LOGO_URL else None
 
     def validate(self):
         from indico.core.auth import login_rate_limiter

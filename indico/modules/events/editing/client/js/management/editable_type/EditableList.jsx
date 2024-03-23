@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -209,6 +209,20 @@ function EditableListDisplay({
         })),
         isMatch: (contrib, selectedOptions) =>
           contrib.c.keywords.some(k => selectedOptions.includes(k)),
+      },
+      {
+        key: 'tags',
+        text: Translate.string('Tags'),
+        options: _.uniqBy(
+          contribsWithEditables
+            .map(c => c.editable.tags)
+            .filter(x => x.length)
+            .reduce((pre, cur) => pre.concat(cur), []),
+          'code'
+        ).map(t => ({value: t.code, text: t.code, color: t.color})),
+        isMatch: (contrib, selectedOptions) =>
+          contrib.c.editable?.tags &&
+          selectedOptions.some(tag => contrib.c.editable.tags.map(t => t.code).includes(tag)),
       },
     ],
     [contribList, contribsWithEditables]
@@ -590,7 +604,8 @@ function EditableListDisplay({
           )}
         </div>
         <ListFilter
-          list={filterableContribs}
+          name="editable-list-filter"
+          list={filterableContribs || []}
           filterOptions={filterOptions}
           searchableId={e => e.searchableId}
           searchableFields={e => e.searchableFields}

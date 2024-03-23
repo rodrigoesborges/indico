@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -67,13 +67,13 @@ class SingleChoiceField(_ChoiceFieldBase):
         choices = [(x['id'], x['option']) for x in self.object.field_data['options']]
         if self.object.field_data['display_type'] == 'select':
             field_class = _EmptyNoneSelectField
-            choices = [('', '')] + choices
+            choices = [('', ''), *choices]
         else:
             field_class = _EmptyNoneRadioField
             field_options['orientation'] = self.object.field_data['radio_display_type']
             if field_options['orientation'] == 'vertical' and not self.object.is_required:
                 field_options['default'] = ''
-                choices = [('', _('No selection'))] + choices
+                choices = [('', _('No selection')), *choices]
         return self._make_wtforms_field(field_class, choices=choices, **field_options)
 
     def is_value_empty(self, value):

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -30,7 +30,7 @@ def _prettify_params(args):
 
 
 def _interesting_tb_item(item, paths):
-    return (item[0].endswith('.tpl.py') or any(item[0].startswith(p) for p in paths)) and 'sqlalchemy' not in item[0]
+    return any(item[0].startswith(p) for p in paths) and 'sqlalchemy' not in item[0]
 
 
 def _frame_to_tuple(frame):

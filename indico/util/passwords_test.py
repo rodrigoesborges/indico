@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -106,7 +106,7 @@ def test_sha256token_check(password):
 def test_bcryptpassword_fail_bytes():
     pw = BCryptPassword(md5('foo'))
     with pytest.raises(TypeError) as exc_info:
-        pw == b'foo'
+        pw == b'foo'  # noqa: B015
     assert str(exc_info.value) == "password must be str, not <class 'bytes'>"
 
 

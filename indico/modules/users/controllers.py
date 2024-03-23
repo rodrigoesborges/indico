@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -36,19 +36,22 @@ from indico.modules.categories import Category
 from indico.modules.events import Event
 from indico.modules.events.util import serialize_event_for_ical
 from indico.modules.users import User, logger, user_management_settings
+from indico.modules.users.export_schemas import DataExportRequestSchema
 from indico.modules.users.forms import (AdminAccountRegistrationForm, AdminsForm, AdminUserSettingsForm, MergeForm,
                                         SearchForm, UserEmailsForm, UserPreferencesForm)
 from indico.modules.users.models.affiliations import Affiliation
 from indico.modules.users.models.emails import UserEmail
+from indico.modules.users.models.export import DataExportOptions, DataExportRequestState
 from indico.modules.users.models.users import ProfilePictureSource, UserTitle
 from indico.modules.users.operations import create_user
 from indico.modules.users.schemas import (AffiliationSchema, BasicCategorySchema, FavoriteEventSchema,
                                           UserPersonalDataSchema)
 from indico.modules.users.util import (get_avatar_url_from_name, get_gravatar_for_user, get_linked_events,
                                        get_related_categories, get_suggested_categories, get_unlisted_events,
-                                       merge_users, search_users, send_avatar, serialize_user, set_user_avatar)
-from indico.modules.users.views import (WPUser, WPUserDashboard, WPUserFavorites, WPUserPersonalData, WPUserProfilePic,
-                                        WPUsersAdmin)
+                                       get_user_titles, merge_users, search_users, send_avatar, serialize_user,
+                                       set_user_avatar)
+from indico.modules.users.views import (WPUser, WPUserDashboard, WPUserDataExport, WPUserFavorites, WPUserPersonalData,
+                                        WPUserProfilePic, WPUsersAdmin)
 from indico.util.date_time import now_utc
 from indico.util.i18n import _, force_locale
 from indico.util.images import square
@@ -201,7 +204,7 @@ class RHPersonalData(RHUserBase):
     allow_system_user = True
 
     def _process(self):
-        titles = [{'name': t.name, 'title': t.title} for t in UserTitle if t != UserTitle.none]
+        titles = get_user_titles()
         user_values = UserPersonalDataSchema().dump(self.user)
         locked_fields = [] if session.user.is_admin else list(multipass.locked_fields)
         current_affiliation = None
@@ -213,6 +216,44 @@ class RHPersonalData(RHUserBase):
                                                   locked_field_message=multipass.locked_field_message,
                                                   current_affiliation=current_affiliation,
                                                   has_predefined_affiliations=has_predefined_affiliations)
+
+
+class RHUserDataExport(RHUserBase):
+    """Frontend page for user data exports."""
+
+    def _process(self):
+        if req := self.user.data_export_request:
+            data = DataExportRequestSchema().dump(req)
+        else:
+            data = {'state': DataExportRequestState.none.name}
+        export_options = [(opt.name, str(opt.title)) for opt in DataExportOptions]
+        return WPUserDataExport.render_template('data_export.html', 'data_export', user=self.user,
+                                                export_request=data, export_options=export_options)
+
+
+class RHUserDataExportDownload(RHUserBase):
+    """Download the exported user data archive."""
+
+    def _process(self):
+        if not self.user.data_export_request or not self.user.data_export_request.file:
+            raise NotFound
+        logger.info('User data export for %r downloaded by %r', self.user, session.user)
+        return self.user.data_export_request.file.send()
+
+
+class RHUserDataExportAPI(RHUserBase):
+    """API to trigger user data exports."""
+
+    @use_kwargs({
+        'options': fields.List(fields.Enum(DataExportOptions), validate=validate.Length(min=1)),
+        'include_files': fields.Bool(required=True)
+    })
+    def _process_POST(self, options, include_files):
+        from indico.modules.users.tasks import export_user_data
+        export_user_data.delay(self.user, options, include_files)
+        logger.info('User data export for %r triggered by %r [%s, files=%r]',
+                    self.user, session.user, ', '.join(x.name for x in options), include_files)
+        return {'state': DataExportRequestState.running.name}
 
 
 class RHPersonalDataUpdate(RHUserBase):
@@ -251,6 +292,7 @@ class RHSearchAffiliations(RH):
                 db.func.lower(Affiliation.name).startswith(q.lower()).desc(),
                 db.func.lower(Affiliation.name)
             )
+            .limit(20)
             .all())
         return AffiliationSchema(many=True).jsonify(res)
 
@@ -268,6 +310,8 @@ class RHProfilePicturePreview(RHUserBase):
 
     This always uses a fresh picture without any caching.
     """
+
+    flash_user_status = False
 
     @use_kwargs({'source': EnumField(ProfilePictureSource)}, location='view_args')
     def _process(self, source):
@@ -289,7 +333,7 @@ class RHProfilePictureDisplay(RH):
     """Display the user's profile picture."""
 
     def _process_args(self):
-        self.user = User.get_or_404(request.view_args['user_id'], is_deleted=False)
+        self.user = User.get_or_404(request.view_args['user_id'])
 
     def _process(self):
         return send_avatar(self.user)
@@ -405,7 +449,7 @@ class RHUserFavoritesCategoryAPI(RHUserBase):
     def _process_PUT(self):
         if self.category not in self.user.favorite_categories:
             if not self.category.can_access(self.user):
-                raise Forbidden()
+                raise Forbidden
             self.user.favorite_categories.add(self.category)
             if self.suggestion:
                 self.user.suggested_categories.remove(self.suggestion)
@@ -438,7 +482,7 @@ class RHUserFavoritesEventAPI(RHUserBase):
     def _process_PUT(self):
         if self.event not in self.user.favorite_events:
             if not self.event.can_access(self.user):
-                raise Forbidden()
+                raise Forbidden
             self.user.favorite_events.add(self.event)
             signals.users.favorite_event_added.send(self.user, event=self.event)
         return jsonify(success=True)
@@ -748,8 +792,8 @@ class RHAcceptRegistrationRequest(RHRegistrationRequestBase):
     """Accept a registration request."""
 
     def _process(self):
-        user, identity = register_user(self.request.email, self.request.extra_emails, self.request.user_data,
-                                       self.request.identity_data, self.request.settings)
+        user = register_user(self.request.email, self.request.extra_emails, self.request.user_data,
+                             self.request.identity_data, self.request.settings)[0]
         with user.force_user_locale():
             tpl = get_template_module('users/emails/registration_request_accepted.txt', user=user)
             email = make_email(self.request.email, template=tpl)

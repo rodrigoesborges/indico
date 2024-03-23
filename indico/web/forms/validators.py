@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -13,7 +13,7 @@ from wtforms.validators import EqualTo, Length, Regexp, StopValidation, Validati
 from indico.util.date_time import as_utc, format_date, format_datetime, format_human_timedelta, format_time, now_utc
 from indico.util.i18n import _, ngettext
 from indico.util.passwords import validate_secure_password
-from indico.util.string import is_valid_mail
+from indico.util.string import has_relative_links, is_valid_mail
 
 
 class UsedIf:
@@ -31,10 +31,10 @@ class UsedIf:
         if self.condition in (True, False):
             if not self.condition:
                 field.errors[:] = []
-                raise StopValidation()
+                raise StopValidation
         elif not self.condition(form, field):
             field.errors[:] = []
-            raise StopValidation()
+            raise StopValidation
 
 
 class HiddenUnless:
@@ -71,7 +71,7 @@ class HiddenUnless:
                 # Clear existing data (just in case) and use the existing data for the field
                 field.data = None
                 field.process_data(field.object_data)
-            raise StopValidation()
+            raise StopValidation
 
 
 class Exclusive:
@@ -318,7 +318,7 @@ class TimeRange:
     def __call__(self, form, field):
         def _format_time(value):
             return format_time(value) if value else None
-        if self.earliest and field.data < self.earliest or self.latest and field.data > self.latest:
+        if (self.earliest and field.data < self.earliest) or (self.latest and field.data > self.latest):
             if self.earliest is not None and self.latest is not None:
                 message = _('Must be between {earliest} and {latest}.')
             elif self.latest is None:
@@ -345,7 +345,7 @@ class WordCount:
 
     def __call__(self, form, field):
         count = len(re.split(r'\s+', field.data, flags=re.UNICODE)) if field.data else 0
-        if count < self.min or self.max != -1 and count > self.max:
+        if count < self.min or (self.max != -1 and count > self.max):
             if self.max == -1:
                 message = ngettext('Field must contain at least {min} word.',
                                    'Field must contain at least {min} words.', self.min)
@@ -407,3 +407,15 @@ class SecurePassword:
         password = field.data or ''
         if error := validate_secure_password(self.context, password, username=username):
             raise ValidationError(error)
+
+
+class NoRelativeURLs:
+    """Validate that an HTML strings contains no relative URLs.
+
+    This checks only ``img[src]`` and ``a[href]``, but not URLs present as plain
+    text or in any other (unexpected) places.
+    """
+
+    def __call__(self, form, field):
+        if field.data and has_relative_links(field.data):
+            raise ValidationError(_('Links and images may not use relative URLs.'))

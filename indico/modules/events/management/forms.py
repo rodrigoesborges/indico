@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -28,6 +28,7 @@ from indico.modules.designer.util import get_inherited_templates
 from indico.modules.events import Event, LegacyEventMapping
 from indico.modules.events.cloning import EventCloner
 from indico.modules.events.fields import EventPersonLinkListField, ReferencesField
+from indico.modules.events.management.settings import global_event_settings
 from indico.modules.events.models.events import EventType
 from indico.modules.events.models.labels import EventLabel
 from indico.modules.events.models.references import EventReference, ReferenceType
@@ -41,12 +42,12 @@ from indico.web.flask.util import url_for
 from indico.web.forms.base import IndicoForm
 from indico.web.forms.fields import (IndicoDateField, IndicoDateTimeField, IndicoEnumSelectField, IndicoLocationField,
                                      IndicoPasswordField, IndicoProtectionField, IndicoRadioField,
-                                     IndicoSelectMultipleCheckboxField, IndicoTagListField, IndicoTimezoneSelectField,
+                                     IndicoSelectMultipleCheckboxField, IndicoTimezoneSelectField,
                                      IndicoWeekDayRepetitionField, MultiStringField, RelativeDeltaField)
 from indico.web.forms.fields.principals import PermissionsField
 from indico.web.forms.fields.simple import IndicoLinkListField
 from indico.web.forms.validators import HiddenUnless, LinkedDateTime
-from indico.web.forms.widgets import CKEditorWidget, PrefixedTextWidget, SwitchWidget
+from indico.web.forms.widgets import PrefixedTextWidget, SwitchWidget, TinyMCEWidget
 
 
 CLONE_REPEAT_CHOICES = (
@@ -58,12 +59,12 @@ CLONE_REPEAT_CHOICES = (
 
 class EventDataForm(IndicoForm):
     title = StringField(_('Event title'), [DataRequired()])
-    description = TextAreaField(_('Description'), widget=CKEditorWidget(images=True, html_embed=True, height=250))
+    description = TextAreaField(_('Description'), widget=TinyMCEWidget(images=True, height=350))
     url_shortcut = StringField(_('URL shortcut'), filters=[lambda x: (x or None)])
 
     def __init__(self, *args, event, **kwargs):
         self.event = event
-        self.ckeditor_upload_url = url_for('attachments.upload_ckeditor', event)
+        self.editor_upload_url = url_for('attachments.upload_editor', event)
         super().__init__(*args, **kwargs)
         prefix = f'{config.BASE_URL}/e/'
         self.url_shortcut.description = _('The URL shortcut must be unique within this Indico instance and '
@@ -196,12 +197,12 @@ class EventContactInfoForm(IndicoForm):
                                       sortable=True)
     organizer_info = TextAreaField(_('Organizers'))
     additional_info = TextAreaField(_('Additional information'),
-                                    widget=CKEditorWidget(images=True, height=250),
+                                    widget=TinyMCEWidget(images=True, height=250),
                                     description=_('This text is displayed on the main conference page.'))
 
     def __init__(self, *args, event, **kwargs):
         self.event = event
-        self.ckeditor_upload_url = url_for('attachments.upload_ckeditor', event)
+        self.editor_upload_url = url_for('attachments.upload_editor', event)
         super().__init__(*args, **kwargs)
         if self.event.type_ != EventType.lecture:
             del self.organizer_info
@@ -215,7 +216,7 @@ class EventContactInfoForm(IndicoForm):
 
 
 class EventClassificationForm(IndicoForm):
-    keywords = IndicoTagListField(_('Keywords'))
+    # The 'keywords' field is dynamically added when creating the form.
     references = ReferencesField(_('External IDs'), reference_class=EventReference)
     label = QuerySelectField(_('Label'), allow_blank=True, get_label='title')
     label_message = TextAreaField(_('Label message'),
@@ -232,6 +233,12 @@ class EventClassificationForm(IndicoForm):
             del self.label
             del self.label_message
 
+    def validate_keywords(self, field):
+        allowed_keywords = set(global_event_settings.get('allowed_keywords')) | set(field.object_data)
+        keywords = set(field.data)
+        if allowed_keywords and not (keywords <= allowed_keywords):
+            raise ValidationError('Invalid keyword found')
+
 
 class EventPrivacyForm(IndicoForm):
     _data_controller_fields = ('data_controller_name', 'data_controller_email')
@@ -241,7 +248,7 @@ class EventPrivacyForm(IndicoForm):
     privacy_policy_urls = IndicoLinkListField(_('External page'),
                                               description=_('List of URLs to external pages containing privacy '
                                                             'notices.'))
-    privacy_policy = TextAreaField(_('Text'), widget=CKEditorWidget(),
+    privacy_policy = TextAreaField(_('Text'), widget=TinyMCEWidget(),
                                    description=_('Only used if no URL is provided'))
 
     def validate_privacy_policy(self, field):
@@ -262,7 +269,8 @@ class EventProtectionForm(IndicoForm):
     own_no_access_contact = StringField(_('No access contact'),
                                         description=_('Contact information shown when someone lacks access to the '
                                                       'event'))
-    visibility = SelectField(_('Visibility'), [Optional()], coerce=lambda x: None if x == '' else int(x),
+    visibility = SelectField(_('Visibility'),
+                             [Optional()], coerce=lambda x: None if x == '' else int(x),  # noqa: PLC1901
                              description=_('''From which point in the category tree this event will be visible from '''
                                            '''(number of categories upwards). Applies to "Today's events", '''
                                            '''Calendar. If the event is moved, this number will be preserved. '''
@@ -499,7 +507,7 @@ class EventLanguagesForm(IndicoForm):
         locales = [(code, f'{name} ({territory})' if territory else name)
                    for code, (name, territory, __) in get_all_locales().items()]
         locales.sort(key=itemgetter(1))
-        self.default_locale.choices = [('', _('No default language'))] + locales
+        self.default_locale.choices = [('', _('No default language')), *locales]
         self.supported_locales.choices = locales
 
     def post_validate(self):

@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -25,6 +25,8 @@ TEMPLATE_DEFAULTS = {
 class DesignerTemplate(db.Model):
     __tablename__ = 'designer_templates'
     __table_args__ = (db.CheckConstraint('(event_id IS NULL) != (category_id IS NULL)', 'event_xor_category_id_null'),
+                      db.CheckConstraint('(category_id IS NULL) OR (registration_form_id IS NULL)',
+                                         'no_regform_if_category'),
                       {'schema': 'indico'})
 
     id = db.Column(
@@ -38,6 +40,11 @@ class DesignerTemplate(db.Model):
     title = db.Column(
         db.String,
         nullable=False
+    )
+    registration_form_id = db.Column(
+        db.ForeignKey('event_registration.forms.id'),
+        index=True,
+        nullable=True
     )
     event_id = db.Column(
         db.Integer,
@@ -75,6 +82,15 @@ class DesignerTemplate(db.Model):
         db.Boolean,
         nullable=False,
         default=False
+    )
+    registration_form = db.relationship(
+        'RegistrationForm',
+        lazy=True,
+        foreign_keys=registration_form_id,
+        backref=db.backref(
+            'designer_templates',
+            lazy=True
+        )
     )
     category = db.relationship(
         'Category',
@@ -152,6 +168,20 @@ class DesignerTemplate(db.Model):
     def __repr__(self):
         return format_repr(self, 'id', 'event_id', 'category_id', _text=self.title)
 
+    def link_regform(self, regform):
+        """Link this template to a registration form."""
+        self.registration_form = regform
+
+    def unlink_regform(self):
+        """Unlink this template from a registration form."""
+        self.registration_form = None
+
+    @property
+    def is_unlinkable(self):
+        """Return `True` if the template can be unlinked from a registration form."""
+        from indico.modules.designer.util import has_regform_field_placeholders
+        return not has_regform_field_placeholders(self.data)
+
 
 class _OwnerComparator(Comparator):
     def __init__(self, cls):
@@ -167,4 +197,4 @@ class _OwnerComparator(Comparator):
         elif isinstance(other, db.m.Category):
             return self.cls.category == other
         else:
-            raise ValueError(f'Unexpected object type {type(other)}: {other}')
+            raise TypeError(f'Unexpected object type {type(other)}: {other}')

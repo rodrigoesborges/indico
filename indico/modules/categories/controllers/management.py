@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -16,6 +16,7 @@ from sqlalchemy.orm import joinedload, load_only, undefer_group
 from webargs import fields
 from werkzeug.exceptions import BadRequest, Forbidden
 
+from indico.core.config import config
 from indico.core.db import db
 from indico.core.permissions import get_principal_permissions, update_permissions
 from indico.modules.categories import logger
@@ -36,7 +37,7 @@ from indico.modules.events import Event
 from indico.modules.events.notifications import notify_move_request_closure, notify_move_request_creation
 from indico.modules.events.operations import create_event_request
 from indico.modules.logs.models.entries import CategoryLogRealm, LogKind
-from indico.modules.rb.models.reservations import Reservation, ReservationLink
+from indico.modules.rb.models.reservation_occurrences import ReservationOccurrence, ReservationOccurrenceLink
 from indico.modules.users import User
 from indico.util.fs import secure_filename
 from indico.util.i18n import _, ngettext
@@ -76,7 +77,7 @@ class RHManageCategoryContent(RHManageCategoryBase):
         children_strategy = joinedload('children')
         children_strategy.undefer('deep_children_count')
         children_strategy.undefer('deep_events_count')
-        return children_strategy,
+        return (children_strategy,)
 
     def _process(self):
         page = request.args.get('page', '1')
@@ -102,9 +103,14 @@ class RHManageCategoryContent(RHManageCategoryBase):
 
 class RHManageCategorySettings(RHManageCategoryBase):
     def _process(self):
-        defaults = FormDefaults(self.category,
-                                meeting_theme=self.category.default_event_themes['meeting'],
-                                lecture_theme=self.category.default_event_themes['lecture'])
+        kwargs = {
+            'meeting_theme': self.category.default_event_themes['meeting'],
+            'lecture_theme': self.category.default_event_themes['lecture']
+        }
+
+        if config.ENABLE_GOOGLE_WALLET:
+            kwargs |= self.category.google_wallet_settings
+        defaults = FormDefaults(self.category, **kwargs)
         form = CategorySettingsForm(obj=defaults, category=self.category)
         icon_form = CategoryIconForm(obj=self.category)
         logo_form = CategoryLogoForm(obj=self.category)
@@ -363,7 +369,7 @@ class RHDeleteSubcategories(RHManageCategoryBase):
 
 
 class RHMoveSubcategories(RHMoveCategoryBase):
-    """Bulk-move subcategories"""
+    """Bulk-move subcategories."""
 
     def _process_args(self):
         RHMoveCategoryBase._process_args(self)
@@ -422,15 +428,14 @@ class RHDeleteEvents(RHManageCategorySelectedEventsBase):
     def _process(self):
         is_submitted = 'confirmed' in request.form
         if not is_submitted:
-            # find out which active bookings are linked to the events in question
-            num_bookings = (Reservation.query
-                            .join(ReservationLink)
-                            .join(Event, Event.id == ReservationLink.linked_event_id)
-                            .filter(Event.id.in_(e.id for e in self.events),
-                                    Reservation.is_pending | Reservation.is_accepted)
-                            .count())
+            # find out which active booking occurrences are linked to the events in question
+            num_booking_occurrences = (ReservationOccurrence.query
+                                       .join(ReservationOccurrenceLink)
+                                       .join(Event, Event.id == ReservationOccurrenceLink.linked_event_id)
+                                       .filter(Event.id.in_(e.id for e in self.events), ReservationOccurrence.is_valid)
+                                       .count())
             return jsonify_template('events/management/delete_events.html',
-                                    events=self.events, num_bookings=num_bookings)
+                                    events=self.events, num_booking_occurrences=num_booking_occurrences)
         for ev in self.events[:]:
             ev.delete('Bulk-deleted by category manager', session.user)
         flash(ngettext('You have deleted one event', 'You have deleted {} events', len(self.events))

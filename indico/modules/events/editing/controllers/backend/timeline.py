@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -28,7 +28,7 @@ from indico.modules.events.editing.operations import (assign_editor, create_new_
                                                       create_submitter_revision, delete_editable,
                                                       delete_revision_comment, ensure_latest_revision, replace_revision,
                                                       reset_editable, unassign_editor, undo_review,
-                                                      update_revision_comment)
+                                                      update_review_comment, update_revision_comment)
 from indico.modules.events.editing.schemas import (EditableSchema, EditingConfirmationAction, EditingReviewAction,
                                                    ReviewEditableArgs)
 from indico.modules.events.editing.service import (ServiceRequestFailed, service_get_custom_actions,
@@ -213,11 +213,13 @@ class RHDeleteEditable(RHContributionEditableBase):
 class RHReviewEditable(RHContributionEditableRevisionBase):
     """Review the latest revision of an Editable."""
 
+    SERVICE_ALLOWED = True
+
     def _check_revision_access(self):
         return self.editable.can_perform_editor_actions(session.user)
 
     @use_kwargs(ReviewEditableArgs)
-    def _process(self, action, comment):
+    def _process_POST(self, action, comment):
         argmap = {'tags': EditingTagsField(self.event, load_default=lambda: set())}
         if action in (EditingReviewAction.update, EditingReviewAction.update_accept,
                       EditingReviewAction.request_update):
@@ -225,6 +227,17 @@ class RHReviewEditable(RHContributionEditableRevisionBase):
                                                 required=(action != EditingReviewAction.request_update))
         args = parser.parse(argmap, unknown=EXCLUDE)
         review_and_publish_editable(self.revision, action, comment, args['tags'], args.get('files'))
+        return '', 204
+
+    @use_kwargs({
+        'text': fields.String(required=True),
+    })
+    def _process_PATCH(self, text):
+        update_review_comment(self.revision, text)
+        return '', 204
+
+    def _process_DELETE(self):
+        undo_review(self.revision)
         return '', 204
 
 
@@ -292,19 +305,6 @@ class RHCreateSubmitterRevision(RHContributionEditableRevisionBase):
         return '', 204
 
 
-class RHUndoReview(RHContributionEditableRevisionBase):
-    """Undo the last review/confirmation on an Editable."""
-
-    SERVICE_ALLOWED = True
-
-    def _check_revision_access(self):
-        return self.editable.can_perform_editor_actions(session.user)
-
-    def _process(self):
-        undo_review(self.revision)
-        return '', 204
-
-
 class RHResetEditable(RHContributionEditableRevisionBase):
     """Undo the last review/confirmation on an Editable."""
 
@@ -342,7 +342,7 @@ class RHCreateRevisionComment(RHContributionEditableRevisionBase):
 
 
 class RHEditRevisionComment(RHContributionEditableRevisionBase):
-    """Edit/delete revision comment"""
+    """Edit/delete revision comment."""
 
     normalize_url_spec = {
         'locators': {

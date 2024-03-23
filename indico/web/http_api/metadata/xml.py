@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -23,9 +23,7 @@ def _deserialize_date(date_dict):
 
 
 class XMLSerializer(Serializer):
-    """
-    Receive a fossil (or a collection of them) and converts them to XML.
-    """
+    """Receive a fossil (or a collection of them) and converts them to XML."""
 
     _mime = 'text/xml'
 

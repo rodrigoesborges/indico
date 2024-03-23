@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -38,7 +38,7 @@ def _get_indico_version(ctx, param, value):
 
 @click.group(cls=IndicoFlaskGroup)
 @click.option('--version', '-v', expose_value=False, callback=_get_indico_version, is_flag=True, is_eager=True,
-              help='Show the flask version',)
+              help='Show the flask version')
 def cli():
     """
     This script lets you control various aspects of Indico from the
@@ -84,20 +84,13 @@ def maint():
 
 
 @cli.command(context_settings={'ignore_unknown_options': True, 'allow_extra_args': True}, add_help_option=False)
-@click.option('--watchman', is_flag=True, help='Run celery inside watchman auto-reloader')
 @click.option('--watchfiles', is_flag=True, help='Run celery inside watchfiles auto-reloader')
 @click.pass_context
-def celery(ctx, watchman=False, watchfiles=False):
+def celery(ctx, watchfiles=False):
     """Manage the Celery task daemon."""
     from indico.core.celery.cli import celery_cmd
 
-    if watchman and watchfiles:
-        raise click.UsageError('--watchman and --watchfiles are mutually exclusive')
-    elif watchman:
-        from .devserver import run_watchman
-        run_watchman()
-        return
-    elif watchfiles:
+    if watchfiles:
         from .devserver import run_watchfiles
         run_watchfiles()
         return
@@ -150,8 +143,7 @@ def cleanup(temp, cache, verbose, dry_run, min_age):
 @click.option('--evalex-from', multiple=True,
               help='Restrict the debugger shell to the given ips (can be used multiple times)')
 @click.option('--proxy', is_flag=True, help='Use the ip and protocol provided by the proxy.')
-@click.option('--reloader', 'reloader_type',
-              type=click.Choice(['auto', 'none', 'stat', 'watchdog', 'watchman', 'watchfiles']),
+@click.option('--reloader', 'reloader_type', type=click.Choice(['none', 'watchfiles']),
               default='watchfiles', help='The type of auto-reloader to use.')
 @pass_script_info
 def run(info, **kwargs):

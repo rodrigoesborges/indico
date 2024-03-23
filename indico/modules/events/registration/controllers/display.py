@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -10,7 +10,7 @@ from uuid import UUID
 from flask import flash, jsonify, redirect, request, session
 from sqlalchemy.orm import contains_eager, joinedload, lazyload, load_only, subqueryload
 from webargs import fields
-from werkzeug.exceptions import Forbidden, NotFound
+from werkzeug.exceptions import BadRequest, Forbidden, NotFound
 
 from indico.core.db import db
 from indico.modules.auth.util import redirect_to_login
@@ -20,10 +20,11 @@ from indico.modules.events.models.events import EventType
 from indico.modules.events.payment import payment_event_settings
 from indico.modules.events.registration import registration_settings
 from indico.modules.events.registration.controllers import RegistrationEditMixin, RegistrationFormMixin
+from indico.modules.events.registration.models.form_fields import RegistrationFormFieldData, RegistrationFormItem
 from indico.modules.events.registration.models.forms import RegistrationForm
 from indico.modules.events.registration.models.invitations import InvitationState, RegistrationInvitation
 from indico.modules.events.registration.models.items import PersonalDataType
-from indico.modules.events.registration.models.registrations import Registration, RegistrationState
+from indico.modules.events.registration.models.registrations import Registration, RegistrationData, RegistrationState
 from indico.modules.events.registration.notifications import notify_registration_state_update
 from indico.modules.events.registration.util import (check_registration_email, create_registration, generate_ticket,
                                                      get_event_regforms_registrations, get_flat_section_submission_data,
@@ -32,6 +33,7 @@ from indico.modules.events.registration.views import (WPDisplayRegistrationFormC
                                                       WPDisplayRegistrationFormSimpleEvent,
                                                       WPDisplayRegistrationParticipantList)
 from indico.modules.files.controllers import UploadFileMixin
+from indico.modules.receipts.models.files import ReceiptFile
 from indico.modules.users.util import send_avatar, send_default_avatar
 from indico.util.fs import secure_filename
 from indico.util.i18n import _
@@ -257,7 +259,7 @@ class InvitationMixin:
             flash(_('This invitation does not exist or has been withdrawn.'), 'warning')
 
 
-class RHRegistrationFormCheckEmail(RHRegistrationFormBase):
+class RHRegistrationFormCheckEmail(InvitationMixin, RHRegistrationFormBase):
     """Check how an email will affect the registration."""
 
     ALLOW_PROTECTED_EVENT = True
@@ -269,13 +271,14 @@ class RHRegistrationFormCheckEmail(RHRegistrationFormBase):
     }, location='query')
     def _process_args(self, email, update, management):
         RHRegistrationFormBase._process_args(self)
+        InvitationMixin._process_args(self)
         self.email = email
         self.update = update
         self.management = management
         self.existing_registration = self.regform.get_registration(uuid=self.update) if self.update else None
 
     def _check_access(self):
-        if not self.existing_registration:
+        if not self.existing_registration and not (self.invitation and self.invitation.skip_access_check):
             RHRegistrationFormBase._check_access(self)
 
     def _process(self):
@@ -299,7 +302,12 @@ class RHRegistrationForm(InvitationMixin, RHRegistrationFormRegistrationBase):
     }
 
     def _check_access(self):
-        RHRegistrationFormRegistrationBase._check_access(self)
+        try:
+            RHRegistrationFormRegistrationBase._check_access(self)
+        except Forbidden:
+            if not self.invitation or not self.invitation.skip_access_check:
+                raise
+            self.is_restricted_access = True
         if self.regform.require_login and not session.user and request.method != 'GET':
             raise Forbidden(response=redirect_to_login(reason=_('You are trying to register with a form '
                                                                 'that requires you to be logged in')))
@@ -313,7 +321,7 @@ class RHRegistrationForm(InvitationMixin, RHRegistrationFormRegistrationBase):
     @property
     def _captcha_required(self):
         """Whether a CAPTCHA should be displayed when registering."""
-        return session.user is None and self.regform.require_captcha
+        return session.user is None and self.regform.require_captcha and not self.invitation
 
     def _can_register(self):
         if self.regform.limit_reached:
@@ -361,7 +369,7 @@ class RHUploadRegistrationFile(UploadFileMixin, RHRegistrationFormBase):
     Upload a file from a registration form.
 
     Regform file fields do not wait for the regform to be submitted,
-    but upload the selected files immediately, saving just the genereated uuid.
+    but upload the selected files immediately, saving just the generated uuid.
     Only this uuid is then sent when the regform is submitted.
     """
 
@@ -434,10 +442,21 @@ class RHRegistrationFormDeclineInvitation(InvitationMixin, RHRegistrationFormBas
         RHRegistrationFormBase._process_args(self)
         InvitationMixin._process_args(self)
 
+    def _check_access(self):
+        try:
+            RHRegistrationFormBase._check_access(self)
+        except Forbidden:
+            if not self.invitation.skip_access_check:
+                raise
+            self.is_restricted_access = True
+
     def _process(self):
         if self.invitation.state == InvitationState.pending:
             self.invitation.state = InvitationState.declined
             flash(_('You declined the invitation to register.'))
+        if self.is_restricted_access:
+            # stay on the invitation page because anything else redirects to login
+            return redirect(url_for('.display_regform', self.invitation.locator.uuid))
         return redirect(self.event.url)
 
 
@@ -453,12 +472,22 @@ class RHTicketDownload(RHRegistrationFormRegistrationBase):
         if (not self.regform.ticket_on_event_page and not self.regform.ticket_on_summary_page
                 and not self.regform.event.can_manage(session.user, 'registration')):
             raise Forbidden
-        if self.registration.is_ticket_blocked:
+        ticket_template = self.regform.get_ticket_template()
+        if ticket_template.is_ticket and self.registration.is_ticket_blocked:
             raise Forbidden
 
     def _process(self):
         filename = secure_filename(f'{self.event.title}-Ticket.pdf', 'ticket.pdf')
         return send_file(filename, generate_ticket(self.registration), 'application/pdf')
+
+
+class RHTicketGoogleWallet(RHTicketDownload):
+    """Redirect to the Google Wallet page for a registration ticket."""
+
+    def _process(self):
+        if not (url := self.registration.generate_ticket_google_wallet_url()):
+            raise NotFound('Google Wallet tickets are not available')
+        return redirect(url)
 
 
 class RHRegistrationAvatar(RHDisplayEventBase):
@@ -488,3 +517,52 @@ class RHRegistrationAvatar(RHDisplayEventBase):
         if self.registration.user:
             return send_avatar(self.registration.user)
         return send_default_avatar(self.registration.full_name)
+
+
+class RHReceiptDownload(RHRegistrationFormRegistrationBase):
+    """Download a receipt file from a registration."""
+
+    normalize_url_spec = {
+        'locators': {
+            lambda self: self.receipt_file.locator.registrant
+        },
+        'copy_query_args': {'token'},
+    }
+
+    def _process_args(self):
+        RHRegistrationFormRegistrationBase._process_args(self)
+        self.receipt_file = (ReceiptFile.query
+                             .with_parent(self.registration)
+                             .filter_by(file_id=request.view_args['file_id'])
+                             .first_or_404())
+
+    def _process(self):
+        return self.receipt_file.file.send()
+
+
+class RHRegistrationDownloadPicture(RHRegistrationFormRegistrationBase):
+    """Download a picture attached to a registration."""
+
+    normalize_url_spec = {
+        'locators': {
+            lambda self: self.field_data.locator.registrant_file
+        },
+        'copy_query_args': {'token'},
+    }
+
+    def _process_args(self):
+        super()._process_args()
+        if self.registration.id != request.view_args['registration_id']:
+            raise BadRequest('Invalid picture reference')
+        self.field_data = (RegistrationData.query
+                           .filter(RegistrationFormItem.input_type == 'picture',
+                                   RegistrationData.registration_id == self.registration.id,
+                                   RegistrationData.field_data_id == request.view_args['field_data_id'],
+                                   RegistrationData.filename.isnot(None))
+                           .join(RegistrationData.field_data)
+                           .join(RegistrationFormFieldData.field)
+                           .options(joinedload('registration').joinedload('registration_form'))
+                           .one())
+
+    def _process(self):
+        return self.field_data.send()

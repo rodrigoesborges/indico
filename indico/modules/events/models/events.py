@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -49,6 +49,7 @@ from indico.util.decorators import strict_classproperty
 from indico.util.enum import RichIntEnum
 from indico.util.i18n import _, force_locale, get_all_locales
 from indico.util.iterables import materialize_iterable
+from indico.util.signing import secure_serializer
 from indico.util.string import format_repr, text_to_repr
 from indico.web.flask.util import url_for
 
@@ -78,6 +79,7 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
     Note that the ACL is currently only used for managers but not for
     view access!
     """
+
     __tablename__ = 'events'
     disallowed_protection_modes = frozenset()
     inheriting_have_acl = True
@@ -265,6 +267,12 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
         db.ForeignKey('indico.files.id'),
         nullable=True
     )
+    #: The protection setting for speaker submissions
+    subcontrib_speakers_can_submit = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True
+    )
 
     #: The last user-friendly registration ID
     _last_friendly_registration_id = db.deferred(db.Column(
@@ -394,7 +402,7 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
     # - all_legacy_attachment_folder_mappings (LegacyAttachmentFolderMapping.event)
     # - all_legacy_attachment_mappings (LegacyAttachmentMapping.event)
     # - all_notes (EventNote.event)
-    # - all_room_reservation_links (ReservationLink.event)
+    # - all_room_reservation_occurrence_links (ReservationOccurrenceLink.event)
     # - all_vc_room_associations (VCRoomEventAssociation.event)
     # - attachment_folders (AttachmentFolder.linked_event)
     # - clones (Event.cloned_from)
@@ -421,13 +429,14 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
     # - paper_review_questions (PaperReviewQuestion.event)
     # - paper_templates (PaperTemplate.event)
     # - persons (EventPerson.event)
+    # - receipt_templates (ReceiptTemplate.event)
     # - registration_forms (RegistrationForm.event)
     # - registration_tags (RegistrationTag.event)
     # - registrations (Registration.event)
     # - reminders (EventReminder.event)
     # - requests (Request.event)
     # - roles (EventRole.event)
-    # - room_reservation_links (ReservationLink.linked_event)
+    # - room_reservation_occurrence_links (ReservationOccurrenceLink.linked_event)
     # - session_types (SessionType.event)
     # - sessions (Session.event)
     # - settings (EventSetting.event)
@@ -513,6 +522,11 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
     @property
     def external_logo_url(self):
         return url_for('event_images.logo_display', self, slug=self.logo_metadata['hash'], _external=True)
+
+    @property
+    def external_signed_logo_url(self):
+        return url_for('event_images.logo_display', self, slug=self.logo_metadata['hash'],
+                       token=secure_serializer.dumps(self.id, salt='event-logo-download'), _external=True)
 
     @property
     def participation_regform(self):
@@ -726,9 +740,9 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
         """Check whether the user can lock/unlock the event."""
         return user and (user.is_admin or user == self.creator or (self.category and self.category.can_manage(user)))
 
-    def can_display(self, user):
+    def can_display(self, user, *, allow_admin=True):
         """Check whether the user can display the event in the category."""
-        return self.visibility != 0 or self.can_manage(user)
+        return self.visibility != 0 or self.can_manage(user, allow_admin=allow_admin)
 
     @materialize_iterable()
     def get_manage_button_options(self, *, note_may_exist=False):
@@ -835,7 +849,7 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
         query = SessionBlock.query.filter(SessionBlock.id == id_,
                                           SessionBlock.session.has(event=self, is_deleted=False))
         if scheduled_only:
-            query.filter(SessionBlock.timetable_entry != None)  # noqa
+            query.filter(SessionBlock.timetable_entry != None)  # noqa: E711
         return query.first()
 
     def get_allowed_sender_emails(self, *, include_current_user=True, include_creator=True, include_managers=True,
@@ -890,7 +904,7 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
                   for email, name in emails.items()
                   if email and email.strip()}
         own_email = session.user.email if has_request_context() and session.user else None
-        return dict(sorted(list(emails.items()), key=lambda x: (x[0] != own_email, x[1].lower())))
+        return dict(sorted(emails.items(), key=lambda x: (x[0] != own_email, x[1].lower())))
 
     @memoize_request
     def has_feature(self, feature):
@@ -1037,10 +1051,6 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
         return CallForPapers(self)
 
     @property
-    def reservations(self):
-        return [link.reservation for link in self.all_room_reservation_links]
-
-    @property
     def has_ended(self):
         return self.end_dt <= now_utc()
 
@@ -1049,7 +1059,7 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
         from indico.modules.events.sessions.models.blocks import SessionBlock
         return (SessionBlock.query
                 .filter(SessionBlock.session.has(event=self, is_deleted=False),
-                        SessionBlock.timetable_entry != None)  # noqa
+                        SessionBlock.timetable_entry != None)  # noqa: E711
                 .count())
 
     def __repr__(self):
@@ -1108,11 +1118,15 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
     @property
     def default_language(self):
         locales = get_all_locales()
-        name, territory, ambiguous = locales.get(self.default_locale, ('', '', False))
+        name, territory, _ambiguous = locales.get(self.default_locale, ('', '', False))
         return f'{name} ({territory})' if territory else name
 
-    def get_forced_event_locale(self, user=None, *, allow_session=False):
+    def get_forced_event_locale(self, user=None, *, allow_session=False, always=False):
         if not self.enforce_locale or not (locale := self.default_locale):
+            if always:
+                # if we always want to set a locale (typically for sending emails), use the default locale
+                # either of the event or the instance
+                return self.default_locale or config.DEFAULT_LOCALE
             return None
         if user:
             locale = user.settings.get('lang')
@@ -1124,7 +1138,8 @@ class Event(SearchableTitleMixin, DescriptionMixin, LocationMixin, ProtectionMan
 
     @contextmanager
     def force_event_locale(self, user=None, *, allow_session=False):
-        locale = self.get_forced_event_locale(user, allow_session=allow_session)
+        always = user is None and not allow_session
+        locale = self.get_forced_event_locale(user, allow_session=allow_session, always=always)
         if not locale:
             yield
             return
@@ -1205,25 +1220,25 @@ def _set_label(target, value, oldvalue, *unused):
 
 @listens_for(Event.__table__, 'after_create')
 def _add_timetable_consistency_trigger(target, conn, **kw):
-    sql = '''
+    sql = f'''
         CREATE CONSTRAINT TRIGGER consistent_timetable
         AFTER UPDATE OF start_dt, end_dt
-        ON {table}
+        ON {target.fullname}
         DEFERRABLE INITIALLY DEFERRED
         FOR EACH ROW
         EXECUTE PROCEDURE events.check_timetable_consistency('event');
-    '''.format(table=target.fullname)
+    '''
     DDL(sql).execute(conn)
 
 
 @listens_for(Event.__table__, 'after_create')
 def _add_deletion_consistency_trigger(target, conn, **kw):
-    sql = '''
+    sql = f'''
         CREATE CONSTRAINT TRIGGER consistent_deleted
         AFTER INSERT OR UPDATE OF category_id, is_deleted
-        ON {table}
+        ON {target.fullname}
         DEFERRABLE INITIALLY DEFERRED
         FOR EACH ROW
         EXECUTE PROCEDURE categories.check_consistency_deleted();
-    '''.format(table=target.fullname)
+    '''
     DDL(sql).execute(conn)

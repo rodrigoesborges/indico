@@ -1,5 +1,5 @@
 // This file is part of Indico.
-// Copyright (C) 2002 - 2023 CERN
+// Copyright (C) 2002 - 2024 CERN
 //
 // Indico is free software; you can redistribute it and/or
 // modify it under the terms of the MIT License; see the
@@ -7,8 +7,10 @@
 
 import path from 'path';
 
+// eslint-disable-next-line import/default
 import CopyWebpackPlugin from 'copy-webpack-plugin';
 import glob from 'glob';
+import {pdfjs} from 'react-pdf';
 import {minify} from 'uglify-js';
 import webpack from 'webpack';
 import {customizeArray, mergeWithCustomize} from 'webpack-merge';
@@ -75,7 +77,7 @@ entryPoints = Object.assign(entryPoints, getThemeEntryPoints(config, './themes/'
 export default env => {
   const currentEnv = (env ? env.NODE_ENV : null) || 'development';
 
-  // Minification of copied files (e.g. CKEditor and MathJax)
+  // Minification of copied files (e.g. MathJax)
   const transform =
     currentEnv === 'development'
       ? undefined
@@ -138,7 +140,13 @@ export default env => {
       new CopyWebpackPlugin({
         // mathjax requests some assets dynamically after it has been loaded,
         // so we copy everything to the dist folder.
-        patterns: [{from: path.resolve(modulesDir, 'mathjax'), to: 'js/mathjax', transform}],
+        patterns: [
+          {from: path.resolve(modulesDir, 'mathjax'), to: 'js/mathjax', transform},
+          {
+            from: path.resolve(modulesDir, 'pdfjs-dist/build/pdf.worker.min.js'),
+            to: `js/pdf.worker-${pdfjs.version}.min.js`,
+          },
+        ],
       }),
       new webpack.ProvidePlugin({
         _: ['underscore', 'default'],

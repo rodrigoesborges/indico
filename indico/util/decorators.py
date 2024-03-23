@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -19,6 +19,7 @@ class strict_classproperty(classproperty):
     itself, so it's really just to stop people from accessing
     the property in an inappropriate way.
     """
+
     def __get__(self, obj, type=None):
         if obj is not None:
             raise AttributeError(f'Attribute is not available on instances of {type.__name__}')

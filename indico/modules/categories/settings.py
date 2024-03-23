@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -9,13 +9,13 @@ from functools import wraps
 
 from indico.core.settings import SettingsProxyBase
 from indico.core.settings.util import get_all_settings, get_setting
-from indico.modules.categories import Category
 from indico.modules.categories.models.settings import CategorySetting
 
 
 def _category_or_id(f):
     @wraps(f)
     def wrapper(self, category, *args, **kwargs):
+        from indico.modules.categories import Category
         if isinstance(category, Category):
             category = category.id
         return f(self, int(category), *args, **kwargs)
@@ -83,8 +83,7 @@ class CategorySettingsProxy(SettingsProxyBase):
         :param category: Category (or its ID)
         :param names: One or more names of settings to delete
         """
-        for name in names:
-            CategorySetting.delete(self.module, *name, category_id=category)
+        CategorySetting.delete(self.module, *names, category_id=category)
         self._flush_cache()
 
     @_category_or_id

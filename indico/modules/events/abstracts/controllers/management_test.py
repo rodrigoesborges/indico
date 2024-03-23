@@ -1,5 +1,5 @@
 # This file is part of Indico.
-# Copyright (C) 2002 - 2023 CERN
+# Copyright (C) 2002 - 2024 CERN
 #
 # Indico is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see the
@@ -12,9 +12,6 @@ from indico.modules.events.abstracts.models.review_ratings import AbstractReview
 from indico.modules.events.abstracts.models.reviews import AbstractAction, AbstractReview
 from indico.modules.events.abstracts.settings import abstracts_reviewing_settings
 from indico.modules.events.tracks import Track
-
-
-pytest_plugins = 'indico.modules.events.abstracts.testing.fixtures'
 
 
 @pytest.mark.parametrize(('value', 'scale_min', 'scale_max', 'expected'), (
